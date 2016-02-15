@@ -6,6 +6,11 @@
             [common.users :as users]
             [common.util :refer [split-on-comma]]))
 
+(defn format-coupon-code
+  "Format coupon code to consistent format. (Keep this idempotent!)"
+  [code]
+  (s/replace (s/upper-case code) #" " ""))
+
 (defn get-coupon-by-code
   "Get a coupon from DB given its code (e.g., GAS15)."
   [db-conn code]

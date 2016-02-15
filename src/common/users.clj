@@ -16,6 +16,18 @@
   [:id :type :email :name :phone_number :referral_code
    :referral_gallons :is_courier])
 
+(defn valid-session?
+  [db-conn user-id token]
+  (let [session (!select db-conn
+                         "sessions"
+                         [:id
+                          :timestamp_created]
+                         {:user_id user-id
+                          :token token})]
+    (if (seq session)
+      true
+      false)))
+
 (defn get-user
   "Gets a user from db. Optionally add WHERE constraints."
   [db-conn & {:keys [where]}]
