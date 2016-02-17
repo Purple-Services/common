@@ -1,53 +1,71 @@
 (ns common.zones
   (:require [clojure.string :as s]
-            [common.db :refer [!select]]
+            [common.db :refer [!select conn]]
             [common.util :refer [five-digit-zip-code in?
                                  split-on-comma]]))
 
-(def zones (atom nil))
+(defn process-zones
+  "Process a col of zones for use on the server"
+  [zones]
+  (map #(update-in % [:zip_codes] split-on-comma) zones))
 
 (defn get-all-zones-from-db
   "Get all zones from the database."
   [db-conn]
   (!select db-conn "zones" ["*"] {}))
 
-(defn order->zone-id
-  "Determine which zone the order is in; gives the zone id."
-  [order]
-  (let [zip-code (five-digit-zip-code (:address_zip order))]
-    (:id (first (filter #(in? (:zip_codes %) zip-code)
-                        @zones)))))
+(defn get-zones
+  "Get the all zones from the database and process them."
+  [db-conn]
+  (process-zones (get-all-zones-from-db db-conn)))
 
-;; moved from dispatch.clj
 (defn get-zone-by-zip-code
   "Given a zip code, return the corresponding zone."
   [zip-code]
-  (-> (filter #(= (:id %) (order->zone-id {:address_zip zip-code})) @zones)
-      first))
+  (let [zip-code (five-digit-zip-code zip-code)]
+    (-> (!select (conn) "zones" ["*"] {}
+                 :custom-where
+                 (str "`zip_codes` LIKE '%" zip-code "%'"))
+        process-zones
+        first)))
+
+(defn order->zone-id
+  "Determine which zone the order is in; give the zone id."
+  [order]
+  (-> (get-zone-by-zip-code (:address_zip order))
+      :id))
+
+(defn zip-in-zones?
+  "Determine whether or not zip-code can be found in zones."
+  [zip-code]
+  (boolean (get-zone-by-zip-code zip-code)))
 
 (defn get-fuel-prices
   "Given a zip code, return the fuel prices for that zone."
   [zip-code]
-  (-> zip-code
-      (get-zone-by-zip-code)
-      :fuel_prices
-      (read-string)))
+  (let [putative-zone (get-zone-by-zip-code zip-code)]
+    (when putative-zone
+      (-> putative-zone
+          :fuel_prices
+          (read-string)))))
 
 (defn get-service-fees
   "Given a zip-code, return the service fees for that zone."
   [zip-code]
-  (-> zip-code
-      (get-zone-by-zip-code)
-      :service_fees
-      (read-string)))
+  (let [putative-zone (get-zone-by-zip-code zip-code)]
+    (when putative-zone
+      (-> putative-zone
+          :service_fees
+          (read-string)))))
 
 (defn get-service-time-bracket
   "Given a zip-code, return the service time bracket for that zone."
   [zip-code]
-  (-> zip-code
-      (get-zone-by-zip-code)
-      :service_time_bracket
-      (read-string)))
+  (let [putative-zone (get-zone-by-zip-code zip-code)]
+    (when putative-zone
+      (-> putative-zone
+          :service_time_bracket
+          (read-string)))))
 
 ;; This is only considering the time element. They could be disallowed
 ;; for other reasons.
@@ -55,10 +73,11 @@
   "Given a zip-code, return the time in minutes that one hour orders are
   allowed."
   [zip-code]
-  (-> zip-code
-      (get-service-time-bracket)
-      first
-      (+ 90)))
+  (let [putative-bracket (get-service-time-bracket zip-code)]
+    (when putative-bracket
+      (-> putative-bracket
+          first
+          (+ 90)))))
 
 (defn courier-assigned-zones
   "Given a courier-id, return a set of all zones they are assigned to"
@@ -80,7 +99,7 @@
   (let [courier-zones (filter #(contains?
                                 (courier-assigned-zones db-conn courier-id)
                                 (:id %))
-                              @zones)
+                              (get-zones db-conn))
         zip-codes (apply concat (map :zip_codes courier-zones))]
     (set zip-codes)))
 
