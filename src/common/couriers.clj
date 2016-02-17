@@ -11,10 +11,10 @@
          :zones (if (s/blank? (:zones courier))
                   ;; courier is not assigned to any zones, blank field
                   #{}
-                  (-> (:zones courier)
-                      split-on-comma
-                      (map #(Integer. %))
-                      set))
+                  (->> (:zones courier)
+                       split-on-comma
+                       (map #(Integer. %))
+                       set))
          :timestamp_created
          (/ (.getTime
              (:timestamp_created courier))

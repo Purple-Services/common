@@ -4,7 +4,7 @@
             [common.config :as config]
             [common.db :refer [mysql-escape-str !select]]
             [common.users :as users]
-            [common.util :refer [split-on-comma]]))
+            [common.util :refer [split-on-comma rand-str]]))
 
 (defn format-coupon-code
   "Format coupon code to consistent format. (Keep this idempotent!)"
@@ -29,6 +29,17 @@
           first
           :license_plate))
 
+(defn mark-code-as-used
+  "Mark a coupon as used given its code."
+  [db-conn code license-plate user-id]
+  (sql/with-connection db-conn
+    (sql/do-prepared
+     (str "UPDATE coupons SET "
+          "used_by_license_plates = CONCAT(used_by_license_plates, \""
+          (mysql-escape-str license-plate) "\", ','), "
+          "used_by_user_ids = CONCAT(used_by_user_ids, \""
+          (mysql-escape-str user-id) "\", ',') "
+          " WHERE code = \"" (mysql-escape-str code) "\""))))
 
 (defn mark-code-as-unused
   "Mark a coupon as unused (available for use) given its code."
@@ -90,3 +101,17 @@
             config/referral-referrer-gallons
             " gallons to your account!")))))
 
+;; originally in utils.clj
+(defn gen-coupon-code []
+  (rand-str (remove (set [65  ;; A  - removing vowels to avoid offensive words
+                          69  ;; E
+                          73  ;; I
+                          79  ;; O
+                          85  ;; U
+                          48  ;; 0  - removing nums that look like chars
+                          49  ;; 1
+                          79  ;; O  - removing chars that look like nums
+                          73]);; I
+                    (concat (range 48 58)  ;; 0-9
+                            (range 65 91)))  ;; A-Z
+            5))

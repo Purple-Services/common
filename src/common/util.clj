@@ -1,5 +1,6 @@
 (ns common.util
-  (:import [com.amazonaws.services.sns.model PublishRequest]
+  (:import [com.amazonaws.services.sns.model PublishRequest
+            CreatePlatformEndpointRequest]
            [com.twilio.sdk TwilioRestClient]
            [org.apache.http.message BasicNameValuePair]
            [java.util ArrayList])
@@ -12,7 +13,9 @@
             [clj-time.format :as time-format]
             [postal.core :as postal]
             [common.config :as config]
-            [ardoq.analytics-clj :as segment]))
+            [common.db :refer [conn]]
+            [ardoq.analytics-clj :as segment]
+            [version-clj.core :as version]))
 
 (defmacro !
   "Keeps code from running during compilation."
@@ -46,6 +49,15 @@
   "true if seq contains elm"
   [seq elm]  
   (some #(= elm %) seq))
+
+(defn not-nil-vec
+  [k v]
+  (when-not (nil? v) [k v]))
+
+(defn ver<
+  "Same as <, but works on version number strings (e.g., 2.13.0)."
+  [x y]
+  (= -1 (version/version-compare x y)))
 
 (defn five-digit-zip-code
   [zip-code]
@@ -82,6 +94,59 @@
    (time-format/with-zone full-formatter time-zone)
    (unix->DateTime x)))
 
+(def fuller-formatter (time-format/formatter "M/d/y h:mm a"))
+
+(defn unix->fuller
+  "Convert integer unix timestamp to formatted date string."
+  [x]
+  (time-format/unparse
+   (time-format/with-zone fuller-formatter time-zone)
+   (unix->DateTime x)))
+
+(def hour-formatter (time-format/formatter "H"))
+
+(defn unix->hour-of-day
+  "Convert integer unix timestamp to integer hour of day 0-23."
+  [x]
+  (Integer.
+   (time-format/unparse
+    (time-format/with-zone hour-formatter time-zone)
+    (unix->DateTime x))))
+
+(def minute-formatter (time-format/formatter "m"))
+
+(defn unix->minute-of-hour
+  "Convert integer unix timestamp to integer minute of hour."
+  [x]
+  (Integer.
+   (time-format/unparse
+    (time-format/with-zone minute-formatter time-zone)
+    (unix->DateTime x))))
+
+(defn unix->minute-of-day
+  "How many minutes (int) since beginning of day?"
+  [x]
+  (+ (* (unix->hour-of-day x) 60)
+     (unix->minute-of-hour x)))
+
+(def hmma-formatter (time-format/formatter "h:mm a"))
+(defn unix->hmma
+  "Convert integer unix timestamp to formatted date string."
+  [x]
+  (time-format/unparse
+   (time-format/with-zone hmma-formatter time-zone)
+   (unix->DateTime x)))
+
+(defn minute-of-day->hmma
+  "Convert number of minutes since the beginning of today to a unix timestamp."
+  [m]
+  (unix->hmma
+   (+ (* m 60)
+      (-> (time/date-time 1976) ;; it'll be wrong day but same hmma
+          (time/from-time-zone time-zone)
+          time-coerce/to-long
+          (quot 1000)))))
+
 (defn map->java-hash-map
   "Recursively convert Clojure PersistentArrayMap to Java HashMap."
   [m]
@@ -108,6 +173,17 @@
 (defn new-auth-token []
   (rand-str-alpha-num 128))
 
+(defn get-event-time
+  "Get time of event from event log as unix timestamp Integer.
+  If event hasn't occurred yet, then nil."
+  [event-log event]
+  (some-> event-log
+          (#(unless-p s/blank? % nil))
+          (s/split #"\||\s")
+          (->> (apply hash-map))
+          (get event)
+          (Integer.)))
+
 ;; could this be an atom that is set to nil and initilized later?
 (! (def segment-client (segment/initialize
                         (System/getProperty "SEGMENT_WRITE_KEY"))))
@@ -119,7 +195,6 @@
      (def sns-client (sns/client aws-creds))
      (.setEndpoint sns-client "https://sns.us-west-2.amazonaws.com")))
 
-
 (defn send-email [message-map]
   (try (postal/send-message config/email
                             (assoc message-map
@@ -130,6 +205,26 @@
        (catch Exception e
          {:success false
           :message "Message could not be sent to that address."})))
+
+(defn sns-create-endpoint
+  [client device-token user-id sns-app-arn]
+  (try
+    (let [req (CreatePlatformEndpointRequest.)]
+      ;; (.setCustomUserData req "no custom data")
+      (.setToken req device-token)
+      (.setPlatformApplicationArn req sns-app-arn)
+      (.getEndpointArn (.createPlatformEndpoint client req)))
+    (catch Exception e
+      (only-prod (send-email {:to "chris@purpledelivery.com"
+                              :subject "Purple - Error"
+                              :body (str "AWS SNS Create Endpoint Exception: "
+                                         (.getMessage e)
+                                         "\n\n"
+                                         "user-id: "
+                                         user-id)}))
+      "")))
+
+
 
 (defn sns-publish
   [client target-arn message]
@@ -169,6 +264,15 @@
    (.create
     twilio-sms-factory
     (ArrayList. [(BasicNameValuePair. "Body" message)
+                 (BasicNameValuePair. "To" to-number)
+                 (BasicNameValuePair. "From" config/twilio-from-number)]))))
+
+(defn make-call
+  [to-number call-url]
+  (catch-notify
+   (.create
+    twilio-call-factory
+    (ArrayList. [(BasicNameValuePair. "Url" call-url)
                  (BasicNameValuePair. "To" to-number)
                  (BasicNameValuePair. "From" config/twilio-from-number)]))))
 

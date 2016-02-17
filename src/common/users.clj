@@ -7,9 +7,9 @@
             [crypto.password.bcrypt :as bcrypt]
             [common.couriers :as couriers]
             [common.config :as config]
-            [common.db :refer [mysql-escape-str !select !update]]
-            [common.util :refer [in? only-prod segment-client send-sms
-                                 sns-publish sns-client]]))
+            [common.db :refer [conn mysql-escape-str !select !update]]
+            [common.util :refer [in? only-prod segment-client send-email
+                                 send-sms sns-publish sns-client]]))
 
 (def safe-authd-user-keys
   "The keys of a user map that are safe to send out to auth'd user."
@@ -163,3 +163,20 @@
     (only-prod (send-sms (:phone_number user)
                          message))
     {:success true}))
+
+(defn send-feedback
+  [text & {:keys [user_id]}]
+  (let [user (when user_id
+               (get-user-by-id (conn) user_id))]
+    (send-email {:to "chris@purpledelivery.com"
+                 :cc (into []
+                           (only-prod ["joe@purpledelivery.com"
+                                       "bruno@purpledelivery.com"
+                                       "rachel@purpledelivery.com"]))
+                 :subject "Purple Feedback Form Response"
+                 :body (if user
+                         (str "From User ID: " user_id "\n\n"
+                              "Name: " (:name user) "\n\n"
+                              "Email: " (:email user) "\n\n"
+                              text)
+                         text)})))

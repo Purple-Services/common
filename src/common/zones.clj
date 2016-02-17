@@ -18,11 +18,47 @@
     (:id (first (filter #(in? (:zip_codes %) zip-code)
                         @zones)))))
 
+;; moved from dispatch.clj
 (defn get-zone-by-zip-code
   "Given a zip code, return the corresponding zone."
   [zip-code]
   (-> (filter #(= (:id %) (order->zone-id {:address_zip zip-code})) @zones)
       first))
+
+(defn get-fuel-prices
+  "Given a zip code, return the fuel prices for that zone."
+  [zip-code]
+  (-> zip-code
+      (get-zone-by-zip-code)
+      :fuel_prices
+      (read-string)))
+
+(defn get-service-fees
+  "Given a zip-code, return the service fees for that zone."
+  [zip-code]
+  (-> zip-code
+      (get-zone-by-zip-code)
+      :service_fees
+      (read-string)))
+
+(defn get-service-time-bracket
+  "Given a zip-code, return the service time bracket for that zone."
+  [zip-code]
+  (-> zip-code
+      (get-zone-by-zip-code)
+      :service_time_bracket
+      (read-string)))
+
+;; This is only considering the time element. They could be disallowed
+;; for other reasons.
+(defn get-one-hour-orders-allowed
+  "Given a zip-code, return the time in minutes that one hour orders are
+  allowed."
+  [zip-code]
+  (-> zip-code
+      (get-service-time-bracket)
+      first
+      (+ 90)))
 
 (defn courier-assigned-zones
   "Given a courier-id, return a set of all zones they are assigned to"
