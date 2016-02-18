@@ -175,7 +175,6 @@
       (text-user db-conn courier-id (new-order-text db-conn o true))
       {:success true})))
 
-
 (defn update-status-by-admin
   [db-conn order-id]
   (if-let [order (get-by-id db-conn order-id)]
@@ -246,11 +245,14 @@
         change-order-assignment #(!update db-conn "orders"
                                           {:courier_id new-courier-id}
                                           {:id order-id})
-        notify-new-courier #(users/send-push
-                             db-conn new-courier-id
-                             (str "You have been assigned a new order,"
-                                  " please check your "
-                                  "Orders to view it"))
+        notify-new-courier #(do (users/send-push
+                                 db-conn new-courier-id
+                                 (str "You have been assigned a new order,"
+                                      " please check your "
+                                      "Orders to view it"))
+                                (users/text-user
+                                 db-conn new-courier-id
+                                 (new-order-text db-conn order true)))
         notify-old-courier #(users/send-push
                              db-conn old-courier-id
                              (str "You are no longer assigned to the order at: "
