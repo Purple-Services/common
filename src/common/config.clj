@@ -27,16 +27,6 @@
     (System/setProperty "TWILIO_AUTH_TOKEN" (env :twilio-auto-token))
     (System/setProperty "TWILIO_FROM_NUMBER" (env :twilio-form-number))
     (System/setProperty "SEGMENT_WRITE_KEY" (env :segment-write-key))
-    (System/setProperty "BASIC_AUTH_USERNAME" (env :basic-auth-username))
-    (System/setProperty "BASIC_AUTH_PASSWORD" (env :basic-auth-password))
-    (System/setProperty "BASIC_AUTH_READ_ONLY_USERNAME"
-                        (env :basic-auth-read-only-username))
-    (System/setProperty "BASIC_AUTH_READ_ONLY_PASSWORD"
-                        (env :basic-auth-read-only-password))
-    (System/setProperty "BASIC_AUTH_COURIER_MANAGER_USERNAME"
-                        (env :basic-auth-courier-manager-username))
-    (System/setProperty "BASIC_AUTH_COURIER_MANAGER_PASSWORD"
-                        (env :basic-auth-courier-manager-password))
     (System/setProperty "DASHBOARD_GOOGLE_BROWSER_API_KEY"
                         (env :dashboard-google-browser-api-key))))
 
@@ -61,20 +51,6 @@
    :subname (str "//" db-host ":" db-port "/" db-name)
    :user db-user
    :password db-password})
-
-;;;; Basic Auth, for Dashboard
-;; ...with edit privileges
-(def basic-auth-admin
-  {:username (System/getProperty "BASIC_AUTH_USERNAME")
-   :password (System/getProperty "BASIC_AUTH_PASSWORD")})
-;; ...with read-only privileges (the page is /stats instead of /dashboard)
-(def basic-auth-read-only
-  {:username (System/getProperty "BASIC_AUTH_READ_ONLY_USERNAME")
-   :password (System/getProperty "BASIC_AUTH_READ_ONLY_PASSWORD")})
-;; ...with courier manager privileges only  (/manager)
-(def basic-auth-courier-manager
-  {:username (System/getProperty "BASIC_AUTH_COURIER_MANAGER_USERNAME")
-   :password (System/getProperty "BASIC_AUTH_COURIER_MANAGER_PASSWORD")})
 
 ;;;; Payment
 (def stripe-api-url "https://api.stripe.com/v1/")
