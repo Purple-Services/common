@@ -163,16 +163,14 @@
 ;; note that it takes order-id, not order
 (defn assign
   [db-conn order-id courier-id & {:keys [no-reassigns]}]
-  (let [o (get-by-id db-conn order-id)
-        send-push (users/send-push)
-        text-user (users/text-user)]
+  (let [o (get-by-id db-conn order-id)]
     (when (or (not no-reassigns)
               (= "unassigned" (:status o)))
       (update-status db-conn order-id "assigned")
       (!update db-conn "orders" {:courier_id courier-id} {:id order-id})
       (set-courier-busy db-conn courier-id true)
-      (send-push db-conn courier-id "You have been assigned a new order.")
-      (text-user db-conn courier-id (new-order-text db-conn o true))
+      (users/send-push db-conn courier-id "You have been assigned a new order.")
+      (users/text-user db-conn courier-id (new-order-text db-conn o true))
       {:success true})))
 
 (defn update-status-by-admin
