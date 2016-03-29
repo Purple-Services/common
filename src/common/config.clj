@@ -34,10 +34,9 @@
 ;; Should include trailing forward-slash (e.g., "http://domain.com/")
 (def base-url (System/getProperty "BASE_URL"))
 
-(when-not *compile-files*
-  (def has-ssl? (case (s/lower-case (System/getProperty "HAS_SSL"))
-                  "yes" true
-                  "no" false)))
+(def has-ssl? (case (s/lower-case (or (System/getProperty "HAS_SSL") "no"))
+                "yes" true
+                "no" false))
 
 ;;;; Database
 (def db-host (System/getProperty "DB_HOST"))

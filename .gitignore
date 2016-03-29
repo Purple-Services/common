@@ -13,4 +13,3 @@ pom.xml.asc
 *.#*
 .DS_Store
 profiles.clj
-stats.csv
