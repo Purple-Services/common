@@ -91,10 +91,10 @@
      (str "UPDATE users SET referral_gallons = referral_gallons + "
           config/referral-referrer-gallons
           " WHERE id = \"" (mysql-escape-str user-id) "\"")))
-  ((resolve 'purple.users/send-push) db-conn user-id
-   (str "Thank you for sharing Purple with your friend! We've added "
-        config/referral-referrer-gallons
-        " gallons to your account!")))
+  (users/send-push db-conn user-id (str "Thank you for sharing Purple with your"
+                                        " friend! We've added "
+                                        config/referral-referrer-gallons
+                                        " gallons to your account!")))
 
 ;; originally in utils.clj
 (defn gen-coupon-code []

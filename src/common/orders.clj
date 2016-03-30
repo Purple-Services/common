@@ -137,8 +137,8 @@
       (segment/track segment-client (:user_id o) "Complete Order"
                      (assoc (segment-props o)
                             :revenue (cents->dollars (:total_price o))))
-      ((resolve 'purple.users/send-push) db-conn (:user_id o)
-       "Your delivery has been completed. Thank you!")))
+      (users/send-push db-conn (:user_id o)
+                       "Your delivery has been completed. Thank you!")))
 
 (defn complete
   "Completes order and charges user."
