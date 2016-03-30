@@ -77,7 +77,8 @@
     (when putative-bracket
       (-> putative-bracket
           first
-          (+ 90)))))
+          (+ 0) ;; for 1 1/2 hour delay: (+ 90)
+          ))))
 
 (defn courier-assigned-zones
   "Given a courier-id, return a set of all zones they are assigned to"

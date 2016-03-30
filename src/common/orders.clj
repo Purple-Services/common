@@ -128,12 +128,17 @@
 
 (defn after-payment
   [db-conn o]
-  (do (coupons/apply-referral-bonus db-conn (:coupon_code o))
+  (do (when-not (s/blank? (:coupon_code o))
+        (when-let [user-id (-> (!select db-conn "users" [:id] {:referral_code
+                                                               (:coupon_code o)})
+                               first ;; if this when-let fails, that means this
+                               :id)] ;; is a standard coupon not referral coupon
+          (coupons/apply-referral-bonus db-conn user-id)))
       (segment/track segment-client (:user_id o) "Complete Order"
                      (assoc (segment-props o)
                             :revenue (cents->dollars (:total_price o))))
-      (users/send-push db-conn (:user_id o)
-                       "Your delivery has been completed. Thank you!")))
+      ((resolve 'purple.users/send-push) db-conn (:user_id o)
+       "Your delivery has been completed. Thank you!")))
 
 (defn complete
   "Completes order and charges user."
