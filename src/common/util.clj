@@ -48,7 +48,7 @@
 (defn in? 
   "true if seq contains elm"
   [seq elm]  
-  (some #(= elm %) seq))
+  (boolean (some #(= elm %) seq)))
 
 (defn not-nil-vec
   [k v]
