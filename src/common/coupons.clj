@@ -4,7 +4,7 @@
             [common.config :as config]
             [common.db :refer [mysql-escape-str !select]]
             [common.users :as users]
-            [common.util :refer [split-on-comma rand-str]]))
+            [common.util :refer [split-on-comma rand-str coerce-double]]))
 
 (defn format-coupon-code
   "Format coupon code to consistent format. (Keep this idempotent!)"
@@ -71,7 +71,7 @@
   (sql/with-connection db-conn
     (sql/do-prepared
      (str "UPDATE users SET referral_gallons = referral_gallons - "
-          (Integer. gallons)
+          (coerce-double gallons)
           " WHERE id = \"" (mysql-escape-str user-id) "\""))))
 
 (defn mark-gallons-as-unused
@@ -80,26 +80,21 @@
   (sql/with-connection db-conn
     (sql/do-prepared
      (str "UPDATE users SET referral_gallons = referral_gallons + "
-          (Integer. gallons)
+          (coerce-double gallons)
           " WHERE id = \"" (mysql-escape-str user-id) "\""))))
 
 (defn apply-referral-bonus
   "Add benefits of referral to origin account."
-  [db-conn code]
-  (when-not (s/blank? code)
-    (when-let [user-id (-> (!select db-conn "users" [:id] {:referral_code code})
-                           first ;; if this when-let fails, that means this was
-                           :id)] ;; tried on a standard coupon not referral
-      (sql/with-connection db-conn
-        (sql/do-prepared
-         (str "UPDATE users SET referral_gallons = referral_gallons + "
-              (Integer. config/referral-referrer-gallons)
-              " WHERE id = \"" (mysql-escape-str user-id) "\"")))
-      (users/send-push
-       db-conn user-id
-       (str "Thank you for sharing Purple with your friend! We've added "
-            config/referral-referrer-gallons
-            " gallons to your account!")))))
+  [db-conn user-id]
+  (sql/with-connection db-conn
+    (sql/do-prepared
+     (str "UPDATE users SET referral_gallons = referral_gallons + "
+          config/referral-referrer-gallons
+          " WHERE id = \"" (mysql-escape-str user-id) "\"")))
+  (users/send-push db-conn user-id (str "Thank you for sharing Purple with your"
+                                        " friend! We've added "
+                                        config/referral-referrer-gallons
+                                        " gallons to your account!")))
 
 ;; originally in utils.clj
 (defn gen-coupon-code []

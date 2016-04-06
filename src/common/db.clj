@@ -38,9 +38,11 @@
   []
   @pooled-db)
 
+;; see http://dev.mysql.com/doc/refman/5.5/en/string-literals.html, Table 9.1
+;; for a full list of escape strings
 (defn mysql-escape-str
   [x]
-  (s/escape x {\" "\\\""}))
+  (s/escape x {\" "\\\"" \' "\\'"}))
 
 ;; Find out if an SQLException is for a duplicate entry for a key
 (defn duplicate-entry-exception? [e]
