@@ -1,4 +1,4 @@
-(defproject common "1.0.3-SNAPSHOT"
+(defproject common "1.0.4-SNAPSHOT"
   :description "Common library for Purple web servers"
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/java.jdbc "0.2.3"] ;; required by db.clj
@@ -16,6 +16,6 @@
                  [analytics-clj "0.3.0"] ;; required by payment.clj
                  [version-clj "0.1.2"] ;; required by util.clj
                  ]
-  :pendantic? :warn
+  ;; :pedantic? :warn
   :java-source-paths ["src/java"]
   )

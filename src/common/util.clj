@@ -54,10 +54,20 @@
   [k v]
   (when-not (nil? v) [k v]))
 
+(defn ver=
+  "Same as =, but works on version number strings (e.g., 2.13.0)."
+  [x y]
+  (= 0 (version/version-compare x y)))
+
 (defn ver<
   "Same as <, but works on version number strings (e.g., 2.13.0)."
   [x y]
   (= -1 (version/version-compare x y)))
+
+(defn ver>
+  "Same as <, but works on version number strings (e.g., 2.13.0)."
+  [x y]
+  (= 1 (version/version-compare x y)))
 
 (defn five-digit-zip-code
   [zip-code]
