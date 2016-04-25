@@ -240,8 +240,6 @@
                                          user-id)}))
       "")))
 
-
-
 (defn sns-publish
   [client target-arn message]
   (try
