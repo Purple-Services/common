@@ -18,15 +18,8 @@
 
 (defn valid-session?
   [db-conn user-id token]
-  (let [session (!select db-conn
-                         "sessions"
-                         [:id
-                          :timestamp_created]
-                         {:user_id user-id
-                          :token token})]
-    (if (seq session)
-      true
-      false)))
+  (boolean (seq (!select db-conn "sessions" [:id]
+                         {:user_id user-id :token token}))))
 
 (defn get-user
   "Gets a user from db. Optionally add WHERE constraints."
