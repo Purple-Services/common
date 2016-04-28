@@ -2,62 +2,87 @@
   (:require [clojure.java.jdbc :as sql]
             [clojure.string :as s]
             [common.config :as config]
-            [common.db :refer [mysql-escape-str !select]]
+            [common.db :refer [conn mysql-escape-str !select]]
             [common.users :as users]
             [common.util :refer [split-on-comma rand-str coerce-double]]))
 
-
-;; subscription payment
-
+;;;;
+;;;; Payments
+;;;;
 ;; Initial Payment
 ;; make sure can't have initial payment unless legitimate need to pay
-
+;;
 ;; Auto-renew Payment
 ;; auto-renew
 
-
-
-;; Users Table
-;; "subscription_level"
+;;;;
+;;;; "users" table
+;;;;
+;; "subscription_id"
 ;;  0 - None
 ;;  1 - "Regular membership"
 ;;  2 - "Premium membership"
 ;;  3 - "B2B unlimited deliveries"
-
+;;
 ;; "subscription_expiration_time"
-;; 123456789
+;; e.g., 123456789
 ;;   - timestamp exactly 30 days from time of initial payment, and pushed forward 30 days every auto-renew
 ;;     - get current day number and round up to midnight then add 30 days, so it expires/auto-renews at midnight on the 31st day (PST)
-
+;;
 ;; "subscription_auto_renew"
-;; true
-;; false
+;; true or false
+;;
+;; "subscription_payment_log"
+;; 
+
+;;;;
+;;;; "subscriptions" table
+;;;;  holds definitions of each type of subscription
+;;;;
+;; "id" - e.g.,                           1
+;; "name" - e.g.,                         "Regular Membership"
+;; "price" - e.g.,                        799
+;; "period" - e.g.,                       2592000
+;; "num_free_one_hour" - e.g.,            0
+;; "num_free_three_hour" - e.g.,          3
+;; "num_free_tire_pressure_check" - e.g., 1
+;; "discount_one_hour" - e.g.,            -200 (save $2 for orders after num_free_one_hour)
+;; "discount_three_hour" - e.g.,          -455
+
+;;;;
+;;;; "orders" table
+;;;;
+;; "tire_pressure_check" - true or false (whether or not courier is supposed to do a tire pressure check)
+;; "subscription_id" - subscription id that was used on this order - e.g., 1 - i.e., the subscription_id that the user had at the time they made the order
+;; "subscription_discount" - the total discount due to the subscription used (if any) - e.g., -200 OR e.g., -399 (one of the free deliveries)
 
 
-;; subscription level definitions...
+;; availability check logic changes
+;; check if user has a current subscription that is not expired
+;;   if so,
+;;      get that subscription from "subscriptions" table to get its details
+;;      SELECT from "orders" table to determine the remaining num_free_* counts
+;;        e.g., SELECT tire_pressure_check
+;;              WHERE status=complete AND
+;;              subscription_id = users.subscription_id AND
+;;              timestamp_created BETWEEN [subscription_expiration_time - [subscription's period (e.g., 2592000)]], // in "e.g.,": number of seconds in 30 days (susceptible to a DST bug? (probably 1 hour off at worst))
+;;                                        [subscription_expiration_time]
+;;          we check for where subscription_id and compare to current user subscription_id to naturally handle the case of a subscription upgrade or downgrade
+;;
+;; NOTES: fine to grab this info dynamically as described above, or should keep counters in their own table or this could be a map of some sort in the "users" table?
 
-;; ?table? - subscriptions
-;; max free 1 hours
-;; max free 3 hours
-;; 1 hour fee (for after max free used) (should this be a percentage or a discount instead? (watch out for negative amounts))
-;; 3 hour fee
+;; ? any error if they buy a subscription before their first order and then use a coupon code on their order
 
-
-;; counters - reset to 0 every 
-;; 1 hour orders
-;; 3 hour orders
-;; tire pressure check
-
-
-;; on orders table row say which subscription was used?
-;; ability to unuse a subscription counter if the order is canceled
+;; need some way to hide 3 hour orders 
 
 
 
-(defn get-coupon-by-code
-  "Get a coupon from DB given its code (e.g., GAS15)."
-  [db-conn code]
-  (first (!select db-conn
-                  "coupons"
-                  ["*"]
-                  {:code code})))
+(defn get-subscription-by-id
+  "Get a subscription from DB given its ID."
+  [db-conn id]
+  (first (!select db-conn "subscriptions" ["*"] {:id id})))
+
+(defn get-subscription-of-user
+  "Get a subscription from DB given its ID."
+  [db-conn user]
+  (get-subscription-by-id (:subscription_id user)))
