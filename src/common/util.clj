@@ -89,6 +89,11 @@
          flatten
          (apply str))))
 
+(defn gallons->display-str
+  "Given gallons (Double), convert to string with 2 decimal places or less."
+  [gallons]
+  (.format (java.text.DecimalFormat. "#.##") gallons))
+
 (def time-zone (time/time-zone-for-id "America/Los_Angeles"))
 
 (defn unix->DateTime
