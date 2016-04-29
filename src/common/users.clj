@@ -5,11 +5,12 @@
             [cheshire.core :refer [parse-string]]
             [ardoq.analytics-clj :as segment]
             [crypto.password.bcrypt :as bcrypt]
-            [common.couriers :as couriers]
             [common.config :as config]
-            [common.db :refer [conn mysql-escape-str !select !update]]
             [common.util :refer [in? only-prod segment-client send-email
-                                 send-sms sns-publish sns-client]]))
+                                 send-sms sns-publish sns-client]]
+            [common.db :refer [conn mysql-escape-str !select !update]]
+            [common.couriers :as couriers]
+            [common.payment :as payment]))
 
 (def safe-authd-user-keys
   "The keys of a user map that are safe to send out to auth'd user."
@@ -138,6 +139,25 @@
                   :referral_referrer_gallons config/referral-referrer-gallons}})
     {:success false
      :message "User could not be found."}))
+
+(defn charge-user
+  "Charges user amount (an int in cents) using default payment method."
+  [db-conn user-id amount description idempotency-key
+   & {:keys [metadata  ;; any metadata you want to include in the Stripe charge
+             just-auth ;; don't capture the yet
+             ]}]
+  (let [user (get-user-by-id db-conn user-id)
+        customer-id (:stripe_customer_id user)]
+    (if (s/blank? customer-id)
+      (do (log-error "Error auth'ing charge on user: no payment method is set up.")
+          {:success false})
+      (payment/charge-stripe-customer customer-id
+                                      amount
+                                      description
+                                      (:email user)
+                                      (not just-auth)
+                                      idempotency-key
+                                      metadata))))
 
 (defn send-push
   "Sends a push notification to user."

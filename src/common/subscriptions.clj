@@ -32,8 +32,13 @@
 ;; "subscription_auto_renew"
 ;; true or false
 ;;
-;; "subscription_payment_log"
-;; 
+;; "subscription_payment_log" - edn
+;; [{:paid true
+;;   :stripe_charge_id ch_6473812674826374832
+;;   :stripe_customer_id_charged cus_87d7d87d8dd
+;;   :stripe_balance_transaction_id txf878d97ffdffffff
+;;   :time_paid 1235612223
+;;   :amount_paid 1499}]
 
 ;;;;
 ;;;; "subscriptions" table
@@ -83,6 +88,26 @@
   (first (!select db-conn "subscriptions" ["*"] {:id id})))
 
 (defn get-subscription-of-user
-  "Get a subscription from DB given its ID."
+  "Get the subscription that the user is subscribed to. (nil if not subscribed)"
   [db-conn user]
   (get-subscription-by-id (:subscription_id user)))
+
+
+
+(defn subscribe-user
+  [db-conn user-id subscription-id]
+  (let [subscription  (get-subscription-by-id subscription-id)
+        charge-result (users/charge-user db-conn
+                                         user-id
+                                         (:price subscription)
+                                         "Subscription Payment 1.12.2016"
+                                         ;; need idempotency-key here
+                                         :metadata {:subscription_id subscription-id
+                                                    :user_id user-id})]
+    ;; update payment log
+    (if (:success charge-result)
+      ;; update user subscription expiration and id and etc.)
+  
+  )
+
+(subscribe-user )
