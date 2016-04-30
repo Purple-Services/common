@@ -34,7 +34,7 @@
   [& body]
   `(try ~@body
         (catch Exception e#
-          (log-error (str e#)})))
+          (log-error (str e#)))))
 
 (defmacro unless-p
   "Use x unless the predicate is true for x, then use y instead."

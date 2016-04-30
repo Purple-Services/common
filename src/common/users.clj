@@ -7,7 +7,7 @@
             [crypto.password.bcrypt :as bcrypt]
             [common.config :as config]
             [common.util :refer [in? only-prod segment-client send-email
-                                 send-sms sns-publish sns-client]]
+                                 send-sms sns-publish sns-client log-error]]
             [common.db :refer [conn mysql-escape-str !select !update]]
             [common.couriers :as couriers]
             [common.payment :as payment]))
@@ -27,6 +27,8 @@
   [db-conn & {:keys [where]}]
   (first (!select db-conn "users" ["*"] (merge {} where))))
 
+;; probably should be renamed to "get-by-id", like some of the other namespaces
+;; since we are already contextualized in "users"
 (defn get-user-by-id
   "Gets a user from db by user-id."
   [db-conn user-id]

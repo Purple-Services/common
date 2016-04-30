@@ -1,10 +1,16 @@
 (ns common.subscriptions
   (:require [clojure.java.jdbc :as sql]
             [clojure.string :as s]
+            [clojure.edn :as edn]
+            [clj-time.core :as time]
+            [clj-time.coerce :as time-coerce]
+            [clj-time.format :as time-format]
+            [overtone.at-at :as at-at]
             [common.config :as config]
-            [common.db :refer [conn mysql-escape-str !select]]
+            [common.db :refer [conn mysql-escape-str !select !update]]
             [common.users :as users]
-            [common.util :refer [split-on-comma rand-str coerce-double]]))
+            [common.util :refer [split-on-comma rand-str-alpha-num
+                                 coerce-double time-zone]]))
 
 ;;;;
 ;;;; Payments
@@ -82,32 +88,71 @@
 
 
 
-(defn get-subscription-by-id
+(defn get-by-id
   "Get a subscription from DB given its ID."
   [db-conn id]
   (first (!select db-conn "subscriptions" ["*"] {:id id})))
 
-(defn get-subscription-of-user
+(defn get-of-user
   "Get the subscription that the user is subscribed to. (nil if not subscribed)"
   [db-conn user]
-  (get-subscription-by-id (:subscription_id user)))
+  (get-by-id (:subscription_id user)))
 
+(defn update-payment-log
+  "Update the subscription payment log for this user."
+  [db-conn user charge]
+  (let [curr-payment-log (or (edn/read-string (:subscription_payment_log user))
+                             [])
+        new-log-entry {:amount (:amount charge)
+                       :created (:created charge)
+                       :captured (:captured charge)
+                       :stripe_charge_id (:id charge)
+                       :stripe_customer_id_charged (:customer charge)
+                       :stripe_balance_transaction_id (:balance_transaction charge)
+                       :payment_info (select-keys (:source charge)
+                                                  [:id :brand :exp_month
+                                                   :exp_year :last4])}]
+    (!update db-conn "users"
+             {:subscription_payment_log (str (conj curr-payment-log new-log-entry))}
+             {:id (:id user)})))
 
+;; Round up to midnight tonight locally, then add the 'period' num seconds.
+(defn calculate-expiration-time
+  "Calculate the Unix timestamp for when the subscription should expire."
+  [period]
+  (+ (/ (time-coerce/to-long (org.joda.time.DateMidnight/now time-zone)) 1000)
+     (* 60 60 24) ;; local midnight for tonight
+     period))
 
-(defn subscribe-user
+(defn subscribe
+  "Suscribe a user to certain subscription."
   [db-conn user-id subscription-id]
-  (let [subscription  (get-subscription-by-id subscription-id)
+  (let [subscription  (get-by-id db-conn subscription-id) ;; todo: what if nil?
+        user          (users/get-user-by-id db-conn user-id)
         charge-result (users/charge-user db-conn
                                          user-id
                                          (:price subscription)
-                                         "Subscription Payment 1.12.2016"
-                                         ;; need idempotency-key here
+                                         "Description to go here"
+                                         (rand-str-alpha-num 50) ;; idempotency key
                                          :metadata {:subscription_id subscription-id
                                                     :user_id user-id})]
-    ;; update payment log
+    (update-payment-log db-conn user (:charge charge-result))
     (if (:success charge-result)
-      ;; update user subscription expiration and id and etc.)
-  
-  )
+      (!update db-conn
+               "users"
+               {:subscription_id subscription-id
+                :subscription_expiration_time (calculate-expiration-time
+                                               (:period subscription))
+                :subscription_auto_renew true}
+               {:id user-id})
+      {:success false
+       :message (str "Sorry, we were unable to charge your credit card. "
+                     "Please go to the \"Account\" page and tap on "
+                     "\"Payment Method\" to add a new card.")
+       :message_title "Unable to Charge Card"})))
 
-(subscribe-user )
+;; (subscribe-user (conn) "3N4teHdxCpqNcFzSnpKY" 1)
+
+;; (def job-pool (at-at/mk-pool))
+
+;; (at-at/every 5000 (partial at-at/every 5000 #(println "@") job-pool) job-pool)

@@ -60,7 +60,7 @@
 (defn charge-stripe-customer
   "Authorize a charge on a Stripe customer object. Amount in cents."
   [customer-id
-   amount
+   amount ;; stripe docs: minimum amount is $0.50 US (todo: enforce this)
    description
    receipt-email
    capture
