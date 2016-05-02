@@ -99,22 +99,20 @@
   (get-by-id (:subscription_id user)))
 
 (defn update-payment-log
-  "Update the subscription payment log for this user."
-  [db-conn user charge]
-  (let [curr-payment-log (or (edn/read-string (:subscription_payment_log user))
-                             [])
-        new-log-entry {:amount (:amount charge)
-                       :created (:created charge)
-                       :captured (:captured charge)
-                       :stripe_charge_id (:id charge)
-                       :stripe_customer_id_charged (:customer charge)
-                       :stripe_balance_transaction_id (:balance_transaction charge)
-                       :payment_info (select-keys (:source charge)
-                                                  [:id :brand :exp_month
-                                                   :exp_year :last4])}]
-    (!update db-conn "users"
-             {:subscription_payment_log (str (conj curr-payment-log new-log-entry))}
-             {:id (:id user)})))
+  "Update the subscription payment log for this user with a new charge."
+  [db-conn
+   user    ;; user map
+   charge] ;; "charge object" map from Stripe response
+  (!update db-conn "users"
+           {:subscription_payment_log
+            (str   ;; append new entry to existing payment log
+             (conj (or (edn/read-string (:subscription_payment_log user)) [])
+                   (-> charge
+                       (select-keys [:amount :created :captured :id :customer
+                                     :balance_transaction :source])
+                       (update-in [:source] select-keys [:exp_month :exp_year
+                                                         :id :brand :last4]))))}
+           {:id (:id user)}))
 
 ;; Round up to midnight tonight locally, then add the 'period' num seconds.
 (defn calculate-expiration-time
@@ -151,7 +149,7 @@
                      "\"Payment Method\" to add a new card.")
        :message_title "Unable to Charge Card"})))
 
-;; (subscribe-user (conn) "3N4teHdxCpqNcFzSnpKY" 1)
+;; (subscribe (conn) "3N4teHdxCpqNcFzSnpKY" 1)
 
 ;; (def job-pool (at-at/mk-pool))
 
