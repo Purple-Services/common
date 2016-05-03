@@ -122,35 +122,65 @@
      (* 60 60 24) ;; local midnight for tonight
      period))
 
-(defn subscribe
-  "Suscribe a user to certain subscription."
-  [db-conn user-id subscription-id]
-  (let [subscription  (get-by-id db-conn subscription-id) ;; todo: what if nil?
-        user          (users/get-user-by-id db-conn user-id)
-        charge-result (users/charge-user db-conn
-                                         user-id
-                                         (:price subscription)
-                                         "Description to go here"
-                                         (rand-str-alpha-num 50) ;; idempotency key
-                                         :metadata {:subscription_id subscription-id
-                                                    :user_id user-id})]
+(defn set-auto-renew
+  "Set auto-renew on (true) or off (false) for a user given user-id."
+  [db-conn user-id value]
+  (!update db-conn
+           "users"
+           {:subscription_auto_renew value}
+           {:id user-id}))
+
+(defn gen-charge-description
+  [subscription auto-renew?]
+  (str "Membership Level: "
+       (:name subscription)
+       (when auto-renew? " (renewal)")))
+
+(defn charge-and-update-subscription
+  [db-conn user subscription & {:keys [auto-renew?]}]
+  (let [charge-result
+        (users/charge-user db-conn
+                           (:id user)
+                           (:price subscription)
+                           (gen-charge-description subscription auto-renew?)
+                           (rand-str-alpha-num 50) ;; idempotency key
+                           :metadata {:subscription_id (:id subscription)
+                                      :user_id (:id user)
+                                      :is_auto_renew (boolean auto-renew?)})]
     (update-payment-log db-conn user (:charge charge-result))
     (if (:success charge-result)
       (!update db-conn
                "users"
-               {:subscription_id subscription-id
+               {:subscription_id (:id subscription)
                 :subscription_expiration_time (calculate-expiration-time
                                                (:period subscription))
                 :subscription_auto_renew true}
-               {:id user-id})
+               {:id (:id user)})
       {:success false
        :message (str "Sorry, we were unable to charge your credit card. "
                      "Please go to the \"Account\" page and tap on "
                      "\"Payment Method\" to add a new card.")
        :message_title "Unable to Charge Card"})))
 
+(defn subscribe
+  "Suscribe a user to certain subscription."
+  [db-conn user-id subscription-id]
+  (if-let [subscription (get-by-id db-conn subscription-id)]
+    (charge-and-update-subscription db-conn
+                                    (users/get-user-by-id db-conn user-id)
+                                    subscription)
+    {:success false
+     :message "That subscription ID does not exist."}))
+
+(defn renew
+  "Try to renew a user's subscription."
+  [db-conn user]
+  (charge-and-update-subscription db-conn
+                                  (:id user)
+                                  (get-of-user db-conn user)
+                                  :auto-renew? true))
+
 ;; (subscribe (conn) "3N4teHdxCpqNcFzSnpKY" 1)
+;; (set-auto-renew (conn) "3N4teHdxCpqNcFzSnpKY" true)
 
 ;; (def job-pool (at-at/mk-pool))
-
-;; (at-at/every 5000 (partial at-at/every 5000 #(println "@") job-pool) job-pool)
