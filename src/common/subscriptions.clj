@@ -96,7 +96,22 @@
 (defn get-of-user
   "Get the subscription that the user is subscribed to. (nil if not subscribed)"
   [db-conn user]
-  (get-by-id (:subscription_id user)))
+  (get-by-id db-conn (:subscription_id user)))
+
+(defn valid-subscription?
+  "User's subscription is not expired?"
+  [user]
+  (< (:subscription_expiration_time user)
+     (quot (System/currentTimeMillis) 1000)))
+
+(defn get-usage
+  "Get a map of the usage and allowance of the subscription for current period."
+  [db-conn user]
+  (when-let [subscription (get-of-user db-conn user)]
+    (when (valid-subscription? user)
+      (select-keys subscription [:num_free_one_hour :num_free_three_hour
+                                 :num_free_tire_pressure_check :discount_one_hour
+                                 :discount_three_hour]))))
 
 (defn update-payment-log
   "Update the subscription payment log for this user with a new charge."
@@ -176,11 +191,12 @@
   "Try to renew a user's subscription."
   [db-conn user]
   (charge-and-update-subscription db-conn
-                                  (:id user)
+                                  user
                                   (get-of-user db-conn user)
                                   :auto-renew? true))
 
 ;; (subscribe (conn) "3N4teHdxCpqNcFzSnpKY" 1)
 ;; (set-auto-renew (conn) "3N4teHdxCpqNcFzSnpKY" true)
+;; (renew (conn) (users/get-user-by-id (conn) "3N4teHdxCpqNcFzSnpKY"))
 
 ;; (def job-pool (at-at/mk-pool))
