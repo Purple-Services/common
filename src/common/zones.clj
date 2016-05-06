@@ -43,29 +43,23 @@
 (defn get-fuel-prices
   "Given a zip code, return the fuel prices for that zone."
   [zip-code]
-  (let [putative-zone (get-zone-by-zip-code zip-code)]
-    (when putative-zone
-      (-> putative-zone
+  (some-> (get-zone-by-zip-code zip-code)
           :fuel_prices
-          (read-string)))))
+          read-string))
 
 (defn get-service-fees
   "Given a zip-code, return the service fees for that zone."
   [zip-code]
-  (let [putative-zone (get-zone-by-zip-code zip-code)]
-    (when putative-zone
-      (-> putative-zone
+  (some-> (get-zone-by-zip-code zip-code)
           :service_fees
-          (read-string)))))
+          read-string))
 
 (defn get-service-time-bracket
   "Given a zip-code, return the service time bracket for that zone."
   [zip-code]
-  (let [putative-zone (get-zone-by-zip-code zip-code)]
-    (when putative-zone
-      (-> putative-zone
+  (some-> (get-zone-by-zip-code zip-code)
           :service_time_bracket
-          (read-string)))))
+          read-string))
 
 ;; This is only considering the time element. They could be disallowed
 ;; for other reasons.

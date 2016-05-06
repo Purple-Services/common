@@ -101,7 +101,7 @@
 (defn valid-subscription?
   "User's subscription is not expired?"
   [user]
-  (< (:subscription_expiration_time user)
+  (> (:subscription_expiration_time user)
      (quot (System/currentTimeMillis) 1000)))
 
 (defn get-usage
@@ -109,9 +109,37 @@
   [db-conn user]
   (when-let [subscription (get-of-user db-conn user)]
     (when (valid-subscription? user)
-      (select-keys subscription [:num_free_one_hour :num_free_three_hour
-                                 :num_free_tire_pressure_check :discount_one_hour
-                                 :discount_three_hour]))))
+      (merge (select-keys subscription [:num_free_one_hour :num_free_three_hour
+                                        :num_free_tire_pressure_check
+                                        :discount_one_hour :discount_three_hour])
+             (reduce
+              (fn [a b]
+                (let [target-time-diff (- (:target_time_end b) (:target_time_start b))]
+                  (cond-> a
+                    (= target-time-diff (* 60 60 1))
+                    (update :num_free_one_hour_used inc)
+
+                    (= target-time-diff (* 60 60 3))
+                    (update :num_free_three_hour_used inc)
+
+                    (:tire_pressure_check b)
+                    (update :num_free_tire_pressure_check_used inc))))
+              {:num_free_one_hour_used 0
+               :num_free_three_hour_used 0
+               :num_free_tire_pressure_check_used 0}
+              (!select db-conn "orders"
+                       [:target_time_start :target_time_end :tire_pressure_check]
+                       {}
+                       :custom-where
+                       (str "user_id = \"" (mysql-escape-str (:id user)) "\""
+                            ;; TODO: might as well check subscription id, though it is implied
+                            ;; " AND subscription_id = "
+                            ;; (:id subscription)
+                            " AND status != \"cancelled\""
+                            " AND target_time_start > "
+                            (:subscription_period_start_time user))))))))
+
+;; (get-usage (conn) (users/get-user-by-id (conn) "z5kZavElDQPcmlYzxYLr"))
 
 (defn update-payment-log
   "Update the subscription payment log for this user with a new charge."
@@ -169,6 +197,10 @@
                {:subscription_id (:id subscription)
                 :subscription_expiration_time (calculate-expiration-time
                                                (:period subscription))
+                ;; this is different from expiration_time - the period,
+                ;; because expiration time is set relative to midnight tonight
+                :subscription_period_start_time (quot (System/currentTimeMillis)
+                                                      1000)
                 :subscription_auto_renew true}
                {:id (:id user)})
       {:success false
@@ -195,7 +227,7 @@
                                   (get-of-user db-conn user)
                                   :auto-renew? true))
 
-;; (subscribe (conn) "3N4teHdxCpqNcFzSnpKY" 1)
+;; (subscribe (conn) "z5kZavElDQPcmlYzxYLr" 1)
 ;; (set-auto-renew (conn) "3N4teHdxCpqNcFzSnpKY" true)
 ;; (renew (conn) (users/get-user-by-id (conn) "3N4teHdxCpqNcFzSnpKY"))
 
