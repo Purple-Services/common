@@ -188,6 +188,16 @@
 
 (defn split-on-comma [x] (s/split x #","))
 
+(defn user-first-name
+  "The first segment of their name before any spaces."
+  [full-name]
+  (first (s/split full-name #" ")))
+
+(defn user-last-name
+  "Everything in their full name except their first name."
+  [full-name]
+  (s/trim (subs full-name (count (user-first-name full-name)))))
+
 (defn new-auth-token []
   (rand-str-alpha-num 128))
 
