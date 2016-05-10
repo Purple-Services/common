@@ -101,7 +101,7 @@
 (defn valid-subscription?
   "User's subscription is not expired?"
   [user]
-  (> (:subscription_expiration_time user)
+  (> (or (:subscription_expiration_time user) 0)
      (quot (System/currentTimeMillis) 1000)))
 
 (defn get-usage
@@ -132,9 +132,8 @@
                        {}
                        :custom-where
                        (str "user_id = \"" (mysql-escape-str (:id user)) "\""
-                            ;; TODO: might as well check subscription id, though it is implied
-                            ;; " AND subscription_id = "
-                            ;; (:id subscription)
+                            ;; might as well check subscription id, though it is implied
+                            " AND subscription_id = " (:id subscription)
                             " AND status != \"cancelled\""
                             " AND target_time_start > "
                             (:subscription_period_start_time user))))))))
@@ -227,7 +226,7 @@
                                   (get-of-user db-conn user)
                                   :auto-renew? true))
 
-;; (subscribe (conn) "z5kZavElDQPcmlYzxYLr" 1)
+;; (subscribe (conn) "z5kZavElDQPcmlYzxYLr" 2)
 ;; (set-auto-renew (conn) "3N4teHdxCpqNcFzSnpKY" true)
 ;; (renew (conn) (users/get-user-by-id (conn) "3N4teHdxCpqNcFzSnpKY"))
 
