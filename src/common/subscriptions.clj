@@ -35,6 +35,9 @@
 ;;   - timestamp exactly 30 days from time of initial payment, and pushed forward 30 days every auto-renew
 ;;     - get current day number and round up to midnight then add 30 days, so it expires/auto-renews at midnight on the 31st day (PST)
 ;;
+;; "subscription_period_start_time"
+;;
+;;
 ;; "subscription_auto_renew"
 ;; true or false
 ;;
@@ -92,6 +95,14 @@
   "Get a subscription from DB given its ID."
   [db-conn id]
   (first (!select db-conn "subscriptions" ["*"] {:id id})))
+
+(defn get-by-ids
+  "Get subscriptions from DB given their IDs."
+  [db-conn ids]
+  (!select db-conn "subscriptions" ["*"]
+           {}
+           :custom-where
+           (str "id IN (" (s/join "," ids) ")")))
 
 (defn get-of-user
   "Get the subscription that the user is subscribed to. (nil if not subscribed)"
@@ -174,9 +185,8 @@
 
 (defn gen-charge-description
   [subscription auto-renew?]
-  (str "Membership Level: "
-       (:name subscription)
-       (when auto-renew? " (renewal)")))
+  (str "Membership Level: " (:name subscription) (when auto-renew?
+                                                   " (renewal)")))
 
 (defn charge-and-update-subscription
   [db-conn user subscription & {:keys [auto-renew?]}]

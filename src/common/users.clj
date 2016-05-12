@@ -15,7 +15,8 @@
 (def safe-authd-user-keys
   "The keys of a user map that are safe to send out to auth'd user."
   [:id :type :email :name :phone_number :referral_code
-   :referral_gallons :is_courier])
+   :referral_gallons :is_courier :subscription_id :subscription_expiration_time
+   :subscription_auto_renew :subscription_period_start_time])
 
 (defn valid-session?
   [db-conn user-id token]
@@ -126,7 +127,9 @@
         {:success true
          :user (assoc (select-keys user safe-authd-user-keys)
                       :has_push_notifications_set_up
-                      (not (s/blank? (:arn_endpoint user))))
+                      (not (s/blank? (:arn_endpoint user)))
+                      ;; :subscription_usage (subscriptions/get-usage db-conn user)
+                      )
          :vehicles (into [] (get-users-vehicles db-conn user-id))
          :saved_locations (merge {:home {:displayText ""
                                          :googlePlaceId ""}
@@ -138,7 +141,14 @@
                             (couriers/get-by-courier db-conn (:id user))
                             (get-by-user db-conn (:id user))))
          :system {:referral_referred_value config/referral-referred-value
-                  :referral_referrer_gallons config/referral-referrer-gallons}})
+                  :referral_referrer_gallons config/referral-referrer-gallons
+                  :subscriptions
+                  (into {} (map (juxt :id identity)
+                                (!select db-conn "subscriptions" ["*"]{}
+                                         :custom-where
+                                         (str "id IN ("
+                                              (s/join "," [1 2])
+                                              ")"))))}})
     {:success false
      :message "User could not be found."}))
 
