@@ -30,7 +30,7 @@
      ~@body))
 
 (defmacro catch-notify
-  "A try catch block that emails me exceptions."
+  "A try catch block that emails @celwell exceptions."
   [& body]
   `(try ~@body
         (catch Exception e#
@@ -237,7 +237,7 @@
           :message "Message could not be sent to that address."})))
 
 (defn log-error
-  "Currently sends emails to Chris for his inspection. Only for rare and important errors."
+  "Currently sends emails to @celwell for his inspection. Only for rare and important errors."
   [message]
   (only-prod (send-email {:to "chris@purpleapp.com"
                           :subject "Purple - Error"

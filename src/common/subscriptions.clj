@@ -172,7 +172,7 @@
   "Calculate the Unix timestamp for when the subscription should expire."
   [period]
   (+ (/ (time-coerce/to-long (org.joda.time.DateMidnight/now time-zone)) 1000)
-     (* 60 60 24) ;; local midnight for tonight
+     (* 60 60 24) ;; now we're at local midnight for tonight
      period))
 
 (defn set-auto-renew
@@ -189,6 +189,7 @@
                                                    " (renewal)")))
 
 (defn charge-and-update-subscription
+  "Charge a user for a subscription period."
   [db-conn user subscription & {:keys [auto-renew?]}]
   (let [charge-result
         (users/charge-user db-conn

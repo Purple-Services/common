@@ -58,9 +58,9 @@
 ;; this should be refactored since it confuses by changing
 ;; the meaning of :success
 (defn charge-stripe-customer
-  "Authorize a charge on a Stripe customer object. Amount in cents."
+  "Authorize (and optionally capture) a charge on a Stripe customer object."
   [customer-id
-   amount ;; stripe docs: minimum amount is $0.50 US (todo: enforce this)
+   amount ;; in cents; stripe docs: min. amount is $0.50 US (TODO enforce this)
    description
    receipt-email
    capture
