@@ -15,7 +15,7 @@
                  [environ "1.0.0"] ;; required by config.clj
                  [analytics-clj "0.3.0"] ;; required by payment.clj
                  [version-clj "0.1.2"] ;; required by util.clj
-                 [silasdavis/at-at "1.2.0"] ;; scheduled jobs with exception handling
+                 ;; [silasdavis/at-at "1.2.0"] ;; scheduled jobs with exception handling
                  ]
   ;; :pedantic? :warn
   :java-source-paths ["src/java"]
