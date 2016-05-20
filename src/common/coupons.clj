@@ -6,8 +6,9 @@
             [common.users :as users]
             [common.util :refer [split-on-comma rand-str coerce-double]]))
 
+;; keep this idempotent!
 (defn format-coupon-code
-  "Format coupon code to consistent format. (Keep this idempotent!)"
+  "Format coupon code to consistent format."
   [code]
   (s/replace (s/upper-case code) #" " ""))
 

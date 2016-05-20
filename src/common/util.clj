@@ -30,13 +30,11 @@
      ~@body))
 
 (defmacro catch-notify
-  "A try catch block that emails me exceptions."
+  "A try catch block that emails @celwell exceptions."
   [& body]
   `(try ~@body
         (catch Exception e#
-          (only-prod (send-email {:to "chris@purpledelivery.com"
-                                  :subject "Purple - Exception Caught"
-                                  :body (str e#)})))))
+          (log-error (str e#)))))
 
 (defmacro unless-p
   "Use x unless the predicate is true for x, then use y instead."
@@ -93,6 +91,11 @@
   "Given gallons (Double), convert to string with 2 decimal places or less."
   [gallons]
   (.format (java.text.DecimalFormat. "#.##") gallons))
+
+(defn now-unix
+  "Current UNIX time as a Number."
+  []
+  (quot (System/currentTimeMillis) 1000))
 
 (def time-zone (time/time-zone-for-id "America/Los_Angeles"))
 
@@ -190,6 +193,16 @@
 
 (defn split-on-comma [x] (s/split x #","))
 
+(defn user-first-name
+  "The first segment of their name before any spaces."
+  [full-name]
+  (first (s/split full-name #" ")))
+
+(defn user-last-name
+  "Everything in their full name except their first name."
+  [full-name]
+  (s/trim (subs full-name (count (user-first-name full-name)))))
+
 (defn new-auth-token []
   (rand-str-alpha-num 128))
 
@@ -216,7 +229,8 @@
                                  (System/getProperty "AWS_SECRET_KEY"))))
   (.setEndpoint sns-client "https://sns.us-west-2.amazonaws.com"))
 
-(defn send-email [message-map]
+(defn send-email
+  [message-map]
   (try (postal/send-message config/email
                             (assoc message-map
                                    :from (str "Purple Services Inc <"
@@ -227,6 +241,13 @@
          {:success false
           :message "Message could not be sent to that address."})))
 
+(defn log-error
+  "Currently sends emails to @celwell for his inspection. Only for rare and important errors."
+  [message]
+  (only-prod (send-email {:to "chris@purpleapp.com"
+                          :subject "Purple - Error"
+                          :body message})))
+
 (defn sns-create-endpoint
   [client device-token user-id sns-app-arn]
   (try
@@ -236,14 +257,10 @@
       (.setPlatformApplicationArn req sns-app-arn)
       (.getEndpointArn (.createPlatformEndpoint client req)))
     (catch Exception e
-      (only-prod (send-email {:to "chris@purpledelivery.com"
-                              :subject "Purple - Error"
-                              :body (str "AWS SNS Create Endpoint Exception: "
-                                         (.getMessage e)
-                                         "\n\n"
-                                         "user-id: "
-                                         user-id)}))
-      "")))
+      (log-error (str "AWS SNS Create Endpoint Exception: "
+                      (.getMessage e) "\n\nuser-id: " user-id))
+      "" ;; return empty endpoint arn
+      )))
 
 (defn sns-publish
   [client target-arn message]
@@ -260,15 +277,10 @@
       (.setTargetArn req target-arn)
       (.publish client req))
     (catch Exception e
-      (only-prod (send-email {:to "chris@purpledelivery.com"
-                              :subject "Purple - Error"
-                              :body (str "AWS SNS Publish Exception: "
-                                         (.getMessage e)
-                                         "\n\n"
-                                         "target-arn: "
-                                         target-arn
-                                         "\nmessage: "
-                                         message)})))))
+      (log-error (str "AWS SNS Publish Exception: "
+                      (.getMessage e)
+                      "\n\ntarget-arn: " target-arn
+                      "\nmessage: " message)))))
 
 ;; Twilio (SMS & Phone Calls)
 (when config/twilio-account-sid
@@ -284,11 +296,10 @@
                              (BasicNameValuePair. "To" to-number)
                              (BasicNameValuePair. "From" config/twilio-from-number)]))
        (catch Exception e
-         (only-prod (send-email {:to "chris@purpledelivery.com"
-                                 :subject "Purple - Twilio Exception Caught"
-                                 :body (str e
-                                            "\nTo-number: " to-number
-                                            "\nMessage: " message)})))))
+         (log-error (str "Purple - Twilio Exception Caught"
+                         "\n" e
+                         "\nTo-number: " to-number
+                         "\nMessage: " message)))))
 
 (defn make-call
   [to-number call-url]

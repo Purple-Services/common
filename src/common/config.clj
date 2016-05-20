@@ -100,9 +100,10 @@
 ;; {:0 7.5
 ;;  :1 10
 ;;  :2 15}
-(def gallon_choices {:0 7.5
+(def gallon-choices {:0 7.5
                      :1 10
                      :2 15})
+(def default-gallon-choice :2)
 
 ;; The flow of order status; nil means status can't be changed
 (def status->next-status
