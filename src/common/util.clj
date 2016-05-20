@@ -92,6 +92,11 @@
   [gallons]
   (.format (java.text.DecimalFormat. "#.##") gallons))
 
+(defn now-unix
+  "Current UNIX time as a Number."
+  []
+  (quot (System/currentTimeMillis) 1000))
+
 (def time-zone (time/time-zone-for-id "America/Los_Angeles"))
 
 (defn unix->DateTime

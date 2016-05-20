@@ -150,6 +150,7 @@
                             (:subscription_period_start_time user))))))))
 
 ;; (get-usage (conn) (users/get-user-by-id (conn) "z5kZavElDQPcmlYzxYLr"))
+;; (get-usage (conn) (users/get-user-by-id (conn) "qV6Gm6RHbi8gmgm8kJ97"))
 
 (defn update-payment-log
   "Update the subscription payment log for this user with a new charge."
