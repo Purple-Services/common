@@ -5,34 +5,31 @@
             [cheshire.core :refer [parse-string]]
             [ardoq.analytics-clj :as segment]
             [crypto.password.bcrypt :as bcrypt]
-            [common.couriers :as couriers]
             [common.config :as config]
-            [common.db :refer [conn mysql-escape-str !select !update]]
             [common.util :refer [in? only-prod segment-client send-email
-                                 send-sms sns-publish sns-client]]))
+                                 send-sms sns-publish sns-client log-error]]
+            [common.db :refer [conn mysql-escape-str !select !update]]
+            [common.couriers :as couriers]
+            [common.payment :as payment]))
 
 (def safe-authd-user-keys
   "The keys of a user map that are safe to send out to auth'd user."
   [:id :type :email :name :phone_number :referral_code
-   :referral_gallons :is_courier])
+   :referral_gallons :is_courier :subscription_id :subscription_expiration_time
+   :subscription_auto_renew :subscription_period_start_time])
 
 (defn valid-session?
   [db-conn user-id token]
-  (let [session (!select db-conn
-                         "sessions"
-                         [:id
-                          :timestamp_created]
-                         {:user_id user-id
-                          :token token})]
-    (if (seq session)
-      true
-      false)))
+  (boolean (seq (!select db-conn "sessions" [:id]
+                         {:user_id user-id :token token}))))
 
 (defn get-user
   "Gets a user from db. Optionally add WHERE constraints."
   [db-conn & {:keys [where]}]
   (first (!select db-conn "users" ["*"] (merge {} where))))
 
+;; probably should be renamed to "get-by-id", like some of the other namespaces
+;; since we are already contextualized in "users"
 (defn get-user-by-id
   "Gets a user from db by user-id."
   [db-conn user-id]
@@ -142,9 +139,35 @@
                             (couriers/get-by-courier db-conn (:id user))
                             (get-by-user db-conn (:id user))))
          :system {:referral_referred_value config/referral-referred-value
-                  :referral_referrer_gallons config/referral-referrer-gallons}})
+                  :referral_referrer_gallons config/referral-referrer-gallons
+                  :subscriptions
+                  (into {} (map (juxt :id identity)
+                                (!select db-conn "subscriptions" ["*"]{}
+                                         :custom-where
+                                         (str "id IN ("
+                                              (s/join "," [1 2])
+                                              ")"))))}})
     {:success false
      :message "User could not be found."}))
+
+(defn charge-user
+  "Charges user amount (an int in cents) using default payment method."
+  [db-conn user-id amount description idempotency-key
+   & {:keys [metadata  ;; any metadata you want to include in the Stripe charge
+             just-auth ;; don't capture the yet
+             ]}]
+  (let [user (get-user-by-id db-conn user-id)
+        customer-id (:stripe_customer_id user)]
+    (if (s/blank? customer-id)
+      (do (log-error "Error auth'ing charge on user: no payment method is set up.")
+          {:success false})
+      (payment/charge-stripe-customer customer-id
+                                      amount
+                                      description
+                                      (:email user)
+                                      (not just-auth)
+                                      idempotency-key
+                                      metadata))))
 
 (defn send-push
   "Sends a push notification to user."

@@ -57,19 +57,24 @@
 
 ;; this should be refactored since it confuses by changing
 ;; the meaning of :success
-(defn auth-charge-stripe-customer
-  "Authorize a charge on a Stripe customer object. Amount in cents."
-  [customer-id order-id amount description receipt-email]
-  (let [idempotency-key order-id
-        resp (:resp (stripe-req "post"
+(defn charge-stripe-customer
+  "Authorize (and optionally capture) a charge on a Stripe customer object."
+  [customer-id
+   amount ;; in cents; stripe docs: min. amount is $0.50 US (TODO enforce this)
+   description
+   receipt-email
+   capture
+   idempotency-key
+   metadata]
+  (let [resp (:resp (stripe-req "post"
                                 "charges"
                                 {:customer customer-id
                                  :amount amount
-                                 :capture false
+                                 :capture capture
                                  :currency config/default-currency
                                  :description description
                                  :receipt_email receipt-email
-                                 :metadata {:order_id order-id}}
+                                 :metadata (or metadata {})}
                                 {:Idempotency-Key idempotency-key}))]
     {:success (boolean (:paid resp))
      :charge resp}))

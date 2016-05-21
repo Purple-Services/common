@@ -6,7 +6,7 @@
             [common.coupons :as coupons]
             [common.config :as config]
             [common.couriers :refer [set-courier-busy update-courier-busy]]
-            [common.db :refer [mysql-escape-str !select !update]]
+            [common.db :refer [mysql-escape-str conn !select !update]]
             [common.payment :as payment]
             [common.users :as users]
             [common.util :refer [cents->dollars cents->dollars-str in?
@@ -105,7 +105,6 @@
            "orders"
            {:stripe_refund_id (:id refund)}
            {:id order-id}))
-
 
 (defn begin-route
   "This is a courier action."
