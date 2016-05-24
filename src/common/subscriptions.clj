@@ -9,7 +9,9 @@
             [common.db :refer [conn mysql-escape-str !select !update]]
             [common.users :as users]
             [common.util :refer [split-on-comma rand-str-alpha-num
-                                 coerce-double time-zone]]))
+                                 coerce-double time-zone cents->dollars
+                                 segment-client]]
+            [ardoq.analytics-clj :as segment]))
 
 ;; todo
 ;; Initial Payment
@@ -123,23 +125,32 @@
                                       :is_auto_renew (boolean auto-renew?)})]
     (update-payment-log db-conn user (:charge charge-result))
     (if (:success charge-result)
-      (!update db-conn
-               "users"
-               {:subscription_id (:id subscription)
-                :subscription_expiration_time (calculate-expiration-time
-                                               (:period subscription))
-                ;; this is different from expiration_time - the period,
-                ;; because expiration time is set relative to midnight tonight
-                :subscription_period_start_time (quot (System/currentTimeMillis)
-                                                      1000)
-                :subscription_auto_renew true}
-               {:id (:id user)})
-      {:success false
-       :message (str "Sorry, we were unable to charge your credit card. "
-                     "Please go to the \"Account\" page and tap on "
-                     "\"Payment Method\" to add a new card. Also, "
-                     "ensure your email address is valid.")
-       :message_title "Unable to Charge Card"})))
+      (do (segment/track segment-client (:id user) "Subscription Payment"
+                         {:subscription_id (:id subscription)
+                          :is_auto_renew (boolean auto-renew?)
+                          :amount (cents->dollars (:price subscription))
+                          :revenue (cents->dollars (:price subscription))})
+          (!update db-conn
+                   "users"
+                   {:subscription_id (:id subscription)
+                    :subscription_expiration_time (calculate-expiration-time
+                                                   (:period subscription))
+                    ;; this is different from expiration_time - the period,
+                    ;; because expiration time is set relative to midnight tonight
+                    :subscription_period_start_time (quot (System/currentTimeMillis)
+                                                          1000)
+                    :subscription_auto_renew true}
+                   {:id (:id user)}))
+      (do (segment/track segment-client (:id user) "Subscription Payment"
+                         {:subscription_id (:id subscription)
+                          :is_auto_renew (boolean auto-renew?)
+                          :amount (cents->dollars (:price subscription))})
+          {:success false
+           :message (str "Sorry, we were unable to charge your credit card. "
+                         "Please go to the \"Account\" page and tap on "
+                         "\"Payment Method\" to add a new card. Also, "
+                         "ensure your email address is valid.")
+           :message_title "Unable to Charge Card"}))))
 
 (defn subscribe
   "Suscribe a user to certain subscription."
