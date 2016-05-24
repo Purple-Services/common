@@ -39,14 +39,12 @@
   (> (or (:subscription_expiration_time user) 0)
      (quot (System/currentTimeMillis) 1000)))
 
-(defn get-usage
+(defn get-with-usage
   "Get a map of the usage and allowance of the subscription for current period."
   [db-conn user]
   (when-let [subscription (get-of-user db-conn user)]
     (when (valid-subscription? user)
-      (merge (select-keys subscription [:num_free_one_hour :num_free_three_hour
-                                        :num_free_tire_pressure_check
-                                        :discount_one_hour :discount_three_hour])
+      (merge subscription
              (reduce
               (fn [a b]
                 (let [target-time-diff (- (:target_time_end b) (:target_time_start b))]
