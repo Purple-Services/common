@@ -141,7 +141,7 @@
                                                           1000)
                     :subscription_auto_renew true}
                    {:id (:id user)}))
-      (do (segment/track segment-client (:id user) "Subscription Payment"
+      (do (segment/track segment-client (:id user) "Subscription Payment Failed"
                          {:subscription_id (:id subscription)
                           :is_auto_renew (boolean auto-renew?)
                           :amount (cents->dollars (:price subscription))})
