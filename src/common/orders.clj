@@ -42,7 +42,7 @@
   (assoc (select-keys o [:vehicle_id :gallons :gas_type :lat :lng
                          :address_street :address_city :address_state
                          :address_zip :license_plate :coupon_code
-                         :referral_gallons_used])
+                         :referral_gallons_used :tire_pressure_check])
          :order_id (:id o)
          :gas_price (cents->dollars (:gas_price o))
          :service_fee (cents->dollars (:service_fee o))
