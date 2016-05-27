@@ -145,7 +145,7 @@
                                 (!select db-conn "subscriptions" ["*"]{}
                                          :custom-where
                                          (str "id IN ("
-                                              (s/join "," [1 2])
+                                              (s/join "," [1 2]) ;; these are the only subs we want to show on the Monthly Memberships page in the app.
                                               ")"))))}})
     {:success false
      :message "User could not be found."}))
