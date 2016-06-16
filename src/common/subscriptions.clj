@@ -13,10 +13,6 @@
                                  segment-client]]
             [ardoq.analytics-clj :as segment]))
 
-;; todo
-;; Initial Payment
-;; make sure can't have initial payment unless legitimate need to pay
-
 (defn get-by-id
   "Get a subscription from DB given its ID."
   [db-conn id]
@@ -119,6 +115,12 @@
                            (:id user)
                            (:price subscription)
                            (gen-charge-description subscription auto-renew?)
+                           ;; TODO perhaps instead of a random idempotency key
+                           ;; it could be a hash of
+                           ;; (calculate-expiration-time (:period subscription))
+                           ;; concatenated with the subscription id.
+                           ;; That way if the POST request was accidentally
+                           ;; sent twice it will only use the first one.
                            (rand-str-alpha-num 50) ;; idempotency key
                            :metadata {:subscription_id (:id subscription)
                                       :user_id (:id user)
@@ -162,10 +164,62 @@
     {:success false
      :message "That subscription ID does not exist."}))
 
+(defn expire-subscription
+  "Cause a subscription to be expired."
+  [db-conn user-id]
+  (!update db-conn
+           "users"
+           {:subscription_id 0
+            :subscription_auto_renew false}
+           {:id user-id}))
+
 (defn renew
   "Try to renew a user's subscription."
   [db-conn user]
-  (charge-and-update-subscription db-conn
-                                  user
-                                  (get-of-user db-conn user)
-                                  :auto-renew? true))
+  (let [result (charge-and-update-subscription db-conn
+                                               user
+                                               (get-of-user db-conn user)
+                                               :auto-renew? true)]
+    (when-not (:success result)
+      (expire-subscription db-conn (:id user))
+      ;; send email saying the renew failed and that they have to
+      ;; add a card then tap on the Subscribe button again
+      )
+    result))
+
+(defn subs-that-expire-tonight
+  "Users whose subscription will expire tonight."
+  [db-conn]
+  (!select db-conn
+           "users"
+           ["*"]
+           {}
+           :custom-where
+           (str "subscription_id != 0 AND "
+                "subscription_expiration_time < "
+                ;; local midnight tonight + 65 minutes (1:05am)
+                (+ (/ (time-coerce/to-long
+                       (org.joda.time.DateMidnight/now time-zone))
+                      1000)
+                   (* 60 60 24)
+                   (* 60 65)))))
+
+;; every day at 4pm Pacific time
+;;   try to renew all auto_renew=1 that are going to expire at midnight that day
+;;   if charge fails, send user email to notify that their subscription will expire
+;;     ? every time a payment method is added, check if a subscription charge needs to be retried
+;;
+;; ;; every day at 10:0pm Pacific time
+;; ;;   set any users.subscription_id's to 0 that have users.subscription_expiration_time less than current time
+
+(defn renew-subs-expiring-tonight
+  [db-conn]
+  (->> (subs-that-expire-tonight db-conn)
+       (filter :subscription_auto_renew)
+       (map (partial renew db-conn))))
+
+(defn expire-all-old-subs
+  [db-conn]
+  (->> (subs-that-expire-tonight db-conn)
+       (filter (complement :subscription_auto_renew))
+       (map (comp (partial expire-subscription db-conn) :id))))
