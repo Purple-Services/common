@@ -216,10 +216,10 @@
   [db-conn]
   (->> (subs-that-expire-tonight db-conn)
        (filter :subscription_auto_renew)
-       (map (partial renew db-conn))))
+       (run! (partial renew db-conn))))
 
 (defn expire-all-old-subs
   [db-conn]
   (->> (subs-that-expire-tonight db-conn)
        (filter (complement :subscription_auto_renew))
-       (map (comp (partial expire-subscription db-conn) :id))))
+       (run! (comp (partial expire-subscription db-conn) :id))))
