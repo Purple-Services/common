@@ -204,14 +204,6 @@
                    (* 60 60 24)
                    (* 60 65)))))
 
-;; every day at 4pm Pacific time
-;;   try to renew all auto_renew=1 that are going to expire at midnight that day
-;;   if charge fails, send user email to notify that their subscription will expire
-;;     ? every time a payment method is added, check if a subscription charge needs to be retried
-;;
-;; ;; every day at 10:0pm Pacific time
-;; ;;   set any users.subscription_id's to 0 that have users.subscription_expiration_time less than current time
-
 (defn renew-subs-expiring-tonight
   [db-conn]
   (->> (subs-that-expire-tonight db-conn)
