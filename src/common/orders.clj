@@ -137,7 +137,13 @@
                      (assoc (segment-props o)
                             :revenue (cents->dollars (:total_price o))))
       (users/send-push db-conn (:user_id o)
-                       "Your delivery has been completed. Thank you!")))
+                       (let [user (users/get-user-by-id db-conn (:user_id o))]
+                         (str "Your delivery has been completed. Share your code "
+                              (:referral_code user)
+                              " to earn free gas"
+                              (when (not (.contains (:arn_endpoint user) "GCM/Purple"))
+                                " \ue112") ; iOS gift emoji
+                              ". Thank you!")))))
 
 (defn complete
   "Completes order and charges user."
