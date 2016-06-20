@@ -42,7 +42,7 @@
   (assoc (select-keys o [:vehicle_id :gallons :gas_type :lat :lng
                          :address_street :address_city :address_state
                          :address_zip :license_plate :coupon_code
-                         :referral_gallons_used])
+                         :referral_gallons_used :tire_pressure_check])
          :order_id (:id o)
          :gas_price (cents->dollars (:gas_price o))
          :service_fee (cents->dollars (:service_fee o))
@@ -137,7 +137,13 @@
                      (assoc (segment-props o)
                             :revenue (cents->dollars (:total_price o))))
       (users/send-push db-conn (:user_id o)
-                       "Your delivery has been completed. Thank you!")))
+                       (let [user (users/get-user-by-id db-conn (:user_id o))]
+                         (str "Your delivery has been completed. Share your code "
+                              (:referral_code user)
+                              " to earn free gas"
+                              (when (not (.contains (:arn_endpoint user) "GCM/Purple"))
+                                " \ue112") ; iOS gift emoji
+                              ". Thank you!")))))
 
 (defn complete
   "Completes order and charges user."
