@@ -17,6 +17,7 @@
     (System/setProperty "DB_PORT" (env :db-port))
     (System/setProperty "DB_USER" (env :db-user))
     (System/setProperty "DB_PASSWORD" (env :db-password))
+    (System/setProperty "SENDGRID_API_KEY" (env :sendgrid-api-key))
     (System/setProperty "EMAIL_USER" (env :email-user))
     (System/setProperty "EMAIL_PASSWORD" (env :email-password))
     (System/setProperty "STRIPE_PRIVATE_KEY" (env :stripe-private-key))
@@ -75,6 +76,13 @@
             :user (System/getProperty "EMAIL_USER")
             :pass (System/getProperty "EMAIL_PASSWORD")
             :ssl :yes!!!11})
+
+;;;; SendGrid
+(def sendgrid-api-url "https://api.sendgrid.com/v3/")
+(def sendgrid-api-key (System/getProperty "SENDGRID_API_KEY"))
+(def sendgrid-default-from "info@purpleapp.com")
+(def sendgrid-default-template-id "353043e0-a994-4c4f-b729-93452c583dee")
+
 
 ;;;; Push Notifications (using AWS SNS)
 ;; the customer apns arn is either Sandbox or Live APNS

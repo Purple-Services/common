@@ -217,18 +217,6 @@
           (get event)
           (Integer.)))
 
-;; could this be an atom that is set to nil and initilized later?
-(when-let [segment-write-key (System/getProperty "SEGMENT_WRITE_KEY")]
-  (def segment-client (segment/initialize
-                       segment-write-key)))
-
-;; Amazon SNS (Push Notifications)
-(when-let [aws-access-key-id (System/getProperty "AWS_ACCESS_KEY_ID")]
-  (def sns-client
-    (sns/client (aws/credentials aws-access-key-id
-                                 (System/getProperty "AWS_SECRET_KEY"))))
-  (.setEndpoint sns-client "https://sns.us-west-2.amazonaws.com"))
-
 (defn send-email
   [message-map]
   (try (postal/send-message config/email
@@ -247,6 +235,18 @@
   (only-prod (send-email {:to "chris@purpleapp.com"
                           :subject "Purple - Error"
                           :body message})))
+
+;; could this be an atom that is set to nil and initilized later?
+(when-let [segment-write-key (System/getProperty "SEGMENT_WRITE_KEY")]
+  (def segment-client (segment/initialize
+                       segment-write-key)))
+
+;; Amazon SNS (Push Notifications)
+(when-let [aws-access-key-id (System/getProperty "AWS_ACCESS_KEY_ID")]
+  (def sns-client
+    (sns/client (aws/credentials aws-access-key-id
+                                 (System/getProperty "AWS_SECRET_KEY"))))
+  (.setEndpoint sns-client "https://sns.us-west-2.amazonaws.com"))
 
 (defn sns-create-endpoint
   [client device-token user-id sns-app-arn]
