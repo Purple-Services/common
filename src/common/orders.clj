@@ -184,9 +184,11 @@
       {:success true})))
 
 (defn update-status-by-admin
-  [db-conn order-id]
+  "Change the status of order-id to new-status"
+  [db-conn order-id new-status]
   (if-let [order (get-by-id db-conn order-id)]
-    (let [advanced-status (next-status (:status order))]
+    (let [current-status (:status order)
+          advanced-status (next-status current-status)]
       ;; Orders with "complete", "cancelled" or "unassigned" statuses can not be
       ;; advanced. These orders should not be modifiable in the dashboard
       ;; console, however this is checked on the server below.
@@ -202,7 +204,12 @@
          :message (str "An order's status can not be advanced to assigned. "
                        "Please assign a courier to this order in "
                        "order to advance this order.")}
-        ;; update the status to "accepted"
+        ;; the next-status of an order should correspond to the status
+        ;; update the status to "accepted", if not it is an error
+        (not= advanced-status new-status)
+        {:success false
+         :message (str "This order's current status is '" current-status
+                       "' and can not be advanced to '" new-status "'")}
         (= advanced-status "accepted")
         (do (accept db-conn order-id)
             ;; let the courier know
