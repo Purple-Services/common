@@ -1,6 +1,5 @@
 (ns common.sendgrid
-  (:require [clojure.string :as s]
-            [clj-http.client :as client]
+  (:require [clj-http.client :as client]
             [common.config :as config]))
 
 (def common-opts
@@ -29,16 +28,29 @@
   (request "mail/send"
            (merge {:personalizations [{:to [{:email to}]
                                        :subject subject}]
-                   :from {:email from}}
+                   :from {:email from
+                          :name "Purple Team"}}
                   payload)))
 
 (defn send-text-email
-  [to subject message & {:keys [from] :or {from config/sendgrid-default-from}}]
-  (send-email to from subject {:content [{:type "text" :value message}]}))
+  [to subject message
+   & {:keys [from]
+      :or {from config/sendgrid-default-from}}]
+  (send-email to from subject
+              {:content [{:type "text" :value message}]}))
 
 (defn send-html-email
-  [to subject message & {:keys [from template-id]
-                         :or {from config/sendgrid-default-from
-                              template-id config/sendgrid-default-template-id}}]
-  (send-email to from subject {:content [{:type "text/html" :value message}]
-                               :template_id template-id}))
+  [to subject message
+   & {:keys [from]
+      :or {from config/sendgrid-default-from}}]
+  (send-email to from subject
+              {:content [{:type "text/html" :value message}]}))
+
+(defn send-template-email
+  [to subject message
+   & {:keys [from template-id]
+      :or {from config/sendgrid-default-from
+           template-id config/sendgrid-default-template-id}}]
+  (send-email to from subject
+              {:content [{:type "text/html" :value message}]
+               :template_id template-id}))
