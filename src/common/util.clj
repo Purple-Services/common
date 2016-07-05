@@ -103,57 +103,50 @@
   [x]
   (time-coerce/from-long (* 1000 x)))
 
-(def full-formatter (time-format/formatter "M/d h:mm a"))
-
-(defn unix->full
-  "Convert integer unix timestamp to formatted date string."
-  [x]
+(defn unix->format
+  "Convert integer unix time to formatted date string using supplied formatter."
+  [t formatter]
   (time-format/unparse
-   (time-format/with-zone full-formatter time-zone)
-   (unix->DateTime x)))
+   (time-format/with-zone formatter time-zone)
+   (unix->DateTime t)))
+
+(def full-formatter (time-format/formatter "M/d h:mm a"))
+(defn unix->full
+  "Convert integer unix time to formatted date string."
+  [t]
+  (unix->format t full-formatter))
+
+(unix->minute-of-day (now-unix))
 
 (def fuller-formatter (time-format/formatter "M/d/y h:mm a"))
-
 (defn unix->fuller
-  "Convert integer unix timestamp to formatted date string."
-  [x]
-  (time-format/unparse
-   (time-format/with-zone fuller-formatter time-zone)
-   (unix->DateTime x)))
+  "Convert integer unix time to formatted date string (M/d/y h:mm a)."
+  [t]
+  (unix->format t fuller-formatter))
 
 (def hour-formatter (time-format/formatter "H"))
-
 (defn unix->hour-of-day
-  "Convert integer unix timestamp to integer hour of day 0-23."
-  [x]
-  (Integer.
-   (time-format/unparse
-    (time-format/with-zone hour-formatter time-zone)
-    (unix->DateTime x))))
+  "Convert integer unix time to integer hour of day 0-23."
+  [t]
+  (Integer. (unix->format t hour-formatter)))
 
 (def minute-formatter (time-format/formatter "m"))
-
 (defn unix->minute-of-hour
   "Convert integer unix timestamp to integer minute of hour."
-  [x]
-  (Integer.
-   (time-format/unparse
-    (time-format/with-zone minute-formatter time-zone)
-    (unix->DateTime x))))
+  [t]
+  (Integer. (unix->format t minute-formatter)))
+
+(def hmma-formatter (time-format/formatter "h:mm a"))
+(defn unix->hmma
+  "Convert integer unix timestamp to formatted date string (h:mm a)."
+  [t]
+  (unix->format t hmma-formatter))
 
 (defn unix->minute-of-day
   "How many minutes (int) since beginning of day?"
   [x]
   (+ (* (unix->hour-of-day x) 60)
      (unix->minute-of-hour x)))
-
-(def hmma-formatter (time-format/formatter "h:mm a"))
-(defn unix->hmma
-  "Convert integer unix timestamp to formatted date string."
-  [x]
-  (time-format/unparse
-   (time-format/with-zone hmma-formatter time-zone)
-   (unix->DateTime x)))
 
 (defn minute-of-day->hmma
   "Convert number of minutes since the beginning of today to a unix timestamp."
