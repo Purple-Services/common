@@ -116,8 +116,6 @@
   [t]
   (unix->format t full-formatter))
 
-(unix->minute-of-day (now-unix))
-
 (def fuller-formatter (time-format/formatter "M/d/y h:mm a"))
 (defn unix->fuller
   "Convert integer unix time to formatted date string (M/d/y h:mm a)."
