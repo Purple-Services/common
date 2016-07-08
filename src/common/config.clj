@@ -113,6 +113,8 @@
                      :2 15})
 (def default-gallon-choice :2)
 
+(def tire-pressure-check-price 700)
+
 ;; The flow of order status; nil means status can't be changed
 (def status->next-status
   {"unassigned"  "assigned"
