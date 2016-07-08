@@ -223,7 +223,8 @@
               (users/send-push
                db-conn user-id
                (str "Your order has been cancelled. If you have any questions,"
-                    " please email us at info@purpledelivery.com.")))
+                    " please email us at info@purpleapp.com or use the Feedback"
+                    " form on the left-hand menu.")))
             (when-not (s/blank? (:stripe_charge_id o))
               (let [refund-result (payment/refund-stripe-charge
                                    (:stripe_charge_id o))]
