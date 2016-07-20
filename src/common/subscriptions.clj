@@ -11,6 +11,7 @@
             [common.util :refer [split-on-comma rand-str-alpha-num
                                  coerce-double time-zone cents->dollars
                                  segment-client]]
+            [common.sendgrid :refer [send-template-email]]
             [ardoq.analytics-clj :as segment]))
 
 (defn get-by-id
@@ -182,9 +183,11 @@
                                                :auto-renew? true)]
     (when-not (:success result)
       (expire-subscription db-conn (:id user))
-      ;; send email saying the renew failed and that they have to
-      ;; add a card then tap on the Subscribe button again
-      )
+      (send-template-email (:email user)
+                           "Subject not used in this template."
+                           "Message body not used in this template."
+                           :template-id "63b4bbe3-9007-49e8-9a55-348195224eaf"
+                           :substitutions {:%name% (:name user)}))
     result))
 
 (defn subs-that-expire-tonight

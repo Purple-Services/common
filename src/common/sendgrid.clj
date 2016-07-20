@@ -60,4 +60,3 @@
               {:content [{:type "text/html" :value message}]
                :template_id template-id}
               :substitutions substitutions))
-
