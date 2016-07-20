@@ -26,6 +26,7 @@
 ;; Example usage of :substitutions key
 ;; {:%name% "Jerry Seinfield"
 ;;  :%planName% "Standard Plan"}
+;; If, in your sendgrid template, you had e.g., "Hi %name%"
 (defn- send-email
   [to from subject payload & {:keys [substitutions]}]
   (request "mail/send"
@@ -59,3 +60,11 @@
               {:content [{:type "text/html" :value message}]
                :template_id template-id}
               :substitutions substitutions))
+
+(send-template-email "elwell.christopher@gmail.com"
+                     "test email"
+                     ""
+                     :template-id "63b4bbe3-9007-49e8-9a55-348195224eaf"
+                     :substitutions {:%name% "Jerry Seinfield"
+                                     :%planName% "Standard Plan"
+                                     :%cardLabel% "Visa *4853"})
