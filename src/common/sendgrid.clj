@@ -61,10 +61,3 @@
                :template_id template-id}
               :substitutions substitutions))
 
-(send-template-email "elwell.christopher@gmail.com"
-                     "test email"
-                     ""
-                     :template-id "63b4bbe3-9007-49e8-9a55-348195224eaf"
-                     :substitutions {:%name% "Jerry Seinfield"
-                                     :%planName% "Standard Plan"
-                                     :%cardLabel% "Visa *4853"})
