@@ -23,11 +23,15 @@
          {:success false
           :resp {:error {:message "Unknown error."}}})))
 
+;; Example usage of :substitutions key
+;; {:%name% "Jerry Seinfield"
+;;  :%planName% "Standard Plan"}
 (defn- send-email
-  [to from subject payload]
+  [to from subject payload & {:keys [substitutions]}]
   (request "mail/send"
            (merge {:personalizations [{:to [{:email to}]
-                                       :subject subject}]
+                                       :subject subject
+                                       :substitutions substitutions}]
                    :from {:email from
                           :name "Purple Team"}}
                   payload)))
@@ -48,9 +52,10 @@
 
 (defn send-template-email
   [to subject message
-   & {:keys [from template-id]
+   & {:keys [from template-id substitutions]
       :or {from config/sendgrid-default-from
            template-id config/sendgrid-default-template-id}}]
   (send-email to from subject
               {:content [{:type "text/html" :value message}]
-               :template_id template-id}))
+               :template_id template-id}
+              :substitutions substitutions))
