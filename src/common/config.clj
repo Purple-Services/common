@@ -29,7 +29,9 @@
     (System/setProperty "TWILIO_FROM_NUMBER" (env :twilio-form-number))
     (System/setProperty "SEGMENT_WRITE_KEY" (env :segment-write-key))
     (System/setProperty "DASHBOARD_GOOGLE_BROWSER_API_KEY"
-                        (env :dashboard-google-browser-api-key))))
+                        (env :dashboard-google-browser-api-key))
+    (System/setProperty "WIW_KEY" (env :wiw-key))
+    (System/setProperty "WIW_TOKEN" (env :wiw-token))))
 
 ;;;; Base Url of the web service
 ;; Should include trailing forward-slash (e.g., "http://domain.com/")
@@ -136,3 +138,8 @@
 ;; Google Maps API Key(s)
 (def dashboard-google-browser-api-key
   (System/getProperty "DASHBOARD_GOOGLE_BROWSER_API_KEY"))
+
+;; wheniwork.com config options
+(def wiw-api-url "https://api.wheniwork.com/2/")
+(def wiw-key (System/getProperty "WIW_KEY"))
+(def wiw-token (System/getProperty "WIW_TOKEN"))
