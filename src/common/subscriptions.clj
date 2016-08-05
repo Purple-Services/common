@@ -54,10 +54,14 @@
                     (= target-time-diff (* 60 60 3))
                     (update :num_free_three_hour_used inc)
 
+                    (= target-time-diff (* 60 60 5))
+                    (update :num_free_five_hour_used inc)
+
                     (:tire_pressure_check b)
                     (update :num_free_tire_pressure_check_used inc))))
               {:num_free_one_hour_used 0
                :num_free_three_hour_used 0
+               :num_free_five_hour_used 0
                :num_free_tire_pressure_check_used 0}
               (!select db-conn "orders"
                        [:target_time_start :target_time_end :tire_pressure_check]
