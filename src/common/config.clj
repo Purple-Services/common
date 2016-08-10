@@ -30,6 +30,8 @@
     (System/setProperty "SEGMENT_WRITE_KEY" (env :segment-write-key))
     (System/setProperty "DASHBOARD_GOOGLE_BROWSER_API_KEY"
                         (env :dashboard-google-browser-api-key))
+    (System/setProperty "GOOGLE_OAUTH_WEB_CLIENT_ID"
+                        (env :google-oauth-web-client-id))
     (System/setProperty "WIW_KEY" (env :wiw-key))
     (System/setProperty "WIW_TOKEN" (env :wiw-token))))
 
@@ -138,6 +140,10 @@
 ;; Google Maps API Key(s)
 (def dashboard-google-browser-api-key
   (System/getProperty "DASHBOARD_GOOGLE_BROWSER_API_KEY"))
+
+;; Google OAuth Web Client ID
+(def google-oauth-web-client-id
+  (System/getProperty "GOOGLE_OAUTH_WEB_CLIENT_ID"))
 
 ;; wheniwork.com config options
 (def wiw-api-url "https://api.wheniwork.com/2/")
