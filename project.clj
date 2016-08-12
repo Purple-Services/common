@@ -11,6 +11,7 @@
                  [crypto-password "0.1.3"] ; required by users.clj
                  [com.draines/postal "1.11.3"] ;; required by util.clj
                  [clj-http "1.0.1"] ;; required by payment.clj - must be above com.twilio.sdk as it pulls in an outdated version of org.apache.http.impl.client.HttpClients that is not compatible with analytics-clj
+                 [clj-http-lite "0.3.0"] ;; required by vin.clj, alternative used due to 'connection reset' error thrown when retrieving https://vpic.nhtsa.dot.gov/api using clj-http
                  [com.twilio.sdk/twilio-java-sdk "4.2.0"] ;; required util.clj
                  [environ "1.0.0"] ;; required by config.clj
                  [analytics-clj "0.3.0"] ;; required by payment.clj
