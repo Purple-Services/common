@@ -16,7 +16,6 @@
                  [environ "1.0.0"] ;; required by config.clj
                  [analytics-clj "0.3.0"] ;; required by payment.clj
                  [version-clj "0.1.2"] ;; required by util.clj
-                 [http.async.client "1.1.0"] ;; required by vin.clj, clj-http alternative that can interface with https://vpic.nhtsa.dot.gov/api/
                  ]
   ;; :pedantic? :warn
   :java-source-paths ["src/java"])
