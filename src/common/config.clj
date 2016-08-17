@@ -33,7 +33,9 @@
     (System/setProperty "GOOGLE_OAUTH_WEB_CLIENT_ID"
                         (env :google-oauth-web-client-id))
     (System/setProperty "WIW_KEY" (env :wiw-key))
-    (System/setProperty "WIW_TOKEN" (env :wiw-token))))
+    (System/setProperty "WIW_TOKEN" (env :wiw-token))
+    (System/setProperty "COURIER_APP_DOWNLOAD_URL_IPHONE" (env :courier-app-download-url-iphone))
+    (System/setProperty "COURIER_APP_DOWNLOAD_URL_ANDROID" (env :courier-app-download-url-android))))
 
 ;;;; Base Url of the web service
 ;; Should include trailing forward-slash (e.g., "http://domain.com/")
@@ -149,3 +151,9 @@
 (def wiw-api-url "https://api.wheniwork.com/2/")
 (def wiw-key (System/getProperty "WIW_KEY"))
 (def wiw-token (System/getProperty "WIW_TOKEN"))
+
+;; Courier App Download
+(def courier-app-download-url-iphone
+  (System/getProperty "COURIER_APP_DOWNLOAD_URL_IPHONE"))
+(def courier-app-download-url-android
+  (System/getProperty "COURIER_APP_DOWNLOAD_URL_ANDROID"))
