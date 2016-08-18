@@ -74,7 +74,7 @@
 (def max-courier-abandon-time (* 60 2))
 ;; How many long after a new order has been assigned to a courier but they
 ;; have not accepted the job; to then send them a reminder (seconds)
-(def courier-reminder-time (* 60 5))
+(def courier-reminder-time (* 60 15))
 
 ;;;; Email
 (def email-from-address (System/getProperty "EMAIL_USER"))
