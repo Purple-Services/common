@@ -76,7 +76,7 @@
           " WHERE id = \"" (mysql-escape-str user-id) "\""))))
 
 (defn mark-gallons-as-unused
-  "Un-use gallons from user's referral gallons. (Add gallons to their account)."
+  "Un-use gallons from user's referral gallons. I.e., add gallons to user."
   [db-conn user-id gallons]
   (sql/with-connection db-conn
     (sql/do-prepared
