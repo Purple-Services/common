@@ -79,7 +79,7 @@
     (test-unix->minute-of-day
      (time/date-time 2015 10 5 7 30)
      time-zone
-     450)
+     455)
     ;; Test that the minutes of the day is 1350 for 10:30PM
     (test-unix->minute-of-day
      (time/date-time 2015 10 5 22 30)
