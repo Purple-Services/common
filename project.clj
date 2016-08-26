@@ -17,5 +17,5 @@
                  [analytics-clj "0.3.0"] ;; required by payment.clj
                  [version-clj "0.1.2"] ;; required by util.clj
                  ]
-  ;; :pedantic? :warn
+  :pedantic? false
   :java-source-paths ["src/java"])

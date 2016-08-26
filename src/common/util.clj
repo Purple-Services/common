@@ -29,6 +29,13 @@
   `(when (= config/db-user "purplemasterprod")
      ~@body))
 
+(defmacro only-prod-or-dev
+  "Only run this code when in production mode."
+  [& body]
+  `(when (or (= config/db-user "purplemasterprod")
+             (= config/db-user "purplemaster"))
+     ~@body))
+
 (defmacro catch-notify
   "A try catch block that emails @celwell exceptions."
   [& body]
