@@ -6,14 +6,13 @@
            [java.util ArrayList])
   (:require [clojure.string :as s]
             [clojure.walk :refer [postwalk]]
-            [clj-aws.core :as aws]
-            [clj-aws.sns :as sns]
             [clj-time.core :as time]
             [clj-time.coerce :as time-coerce]
             [clj-time.format :as time-format]
             [postal.core :as postal]
             [common.config :as config]
             [common.db :refer [conn]]
+            [common.sns :as sns]
             [ardoq.analytics-clj :as segment]
             [version-clj.core :as version]))
 
@@ -242,7 +241,7 @@
 ;; Amazon SNS (Push Notifications)
 (when-let [aws-access-key-id (System/getProperty "AWS_ACCESS_KEY_ID")]
   (def sns-client
-    (sns/client (aws/credentials aws-access-key-id
+    (sns/client (sns/credentials aws-access-key-id
                                  (System/getProperty "AWS_SECRET_KEY"))))
   (.setEndpoint sns-client "https://sns.us-west-2.amazonaws.com"))
 
