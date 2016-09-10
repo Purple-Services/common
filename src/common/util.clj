@@ -147,6 +147,12 @@
   [t]
   (unix->format t hmma-formatter))
 
+(def day-of-week-formatter (time-format/formatter "e"))
+(defn unix->day-of-week
+  "Convert integer unix time to integer day of week 1 (mon) - 7 (sun)."
+  [t]
+  (Integer. (unix->format t day-of-week-formatter)))
+
 (defn unix->minute-of-day
   "How many minutes (int) since beginning of day?"
   [x]
