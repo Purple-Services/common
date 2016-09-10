@@ -4,13 +4,13 @@
  :gallon-choices {:0 7.5
                   :1 10
                   :2 15}
- :default-gallon-choice :2
+ :default-gallon-choice :2 ; NOTE, use key
  :gas-price {"87" 320
              "91" 339}
  :time-choices {:0 60
                 :1 180
                 :2 300}
- :default-time-choice :1
+ :default-time-choice 180 ; NOTE, use value, not key here
  :delivery-fee {60 599
                 180 399
                 300 349}
