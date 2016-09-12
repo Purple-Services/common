@@ -5,7 +5,6 @@
                                  split-on-comma]]))
 
 (defn process-zones
-  "Process a col of zones for use on the server"
   [zones]
   (map #(update-in % [:zip_codes] split-on-comma) zones))
 
