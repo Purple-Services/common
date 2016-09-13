@@ -14,6 +14,14 @@
             [common.sendgrid :refer [send-template-email]]
             [ardoq.analytics-clj :as segment]))
 
+(defn get-all
+  [db-conn]
+  (!select db-conn "subscriptions" ["*"] {}))
+
+(defn get-all-mapped-by-id
+  [db-conn]
+  (into {} (map (juxt :id identity) (get-all db-conn))))
+
 (defn get-by-id
   "Get a subscription from DB given its ID."
   [db-conn id]
@@ -32,7 +40,7 @@
   [db-conn user]
   (get-by-id db-conn (:subscription_id user)))
 
-(defn valid-subscription?
+(defn valid?
   "User's subscription is not expired?"
   [user]
   (> (or (:subscription_expiration_time user) 0)
@@ -42,7 +50,7 @@
   "Get a map of the usage and allowance of the subscription for current period."
   [db-conn user]
   (when-let [subscription (get-of-user db-conn user)]
-    (when (valid-subscription? user)
+    (when (valid? user)
       (merge subscription
              (reduce
               (fn [a b]
