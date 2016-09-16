@@ -20,11 +20,13 @@
        (!select db-conn "couriers" ["*"] (merge {} where))))
 
 (defn all-couriers
-  "All couriers."
+  "Get all couriers from db."
   [db-conn]
   (get-couriers db-conn))
 
-(def busy-statuses ["assigned" "accepted" "enroute" "servicing"])
+(def busy-statuses
+  "A collection of statuses that imply a courier is 'busy'."
+  ["assigned" "accepted" "enroute" "servicing"])
 
 (defn courier-busy?
   "Is courier currently working on an order?"
