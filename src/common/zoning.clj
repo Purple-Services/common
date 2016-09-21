@@ -1,4 +1,4 @@
-(ns common.zoning
+(ns common.zones
   (:require [clojure.string :as s]
             [common.db :refer [!select conn]]
             [common.util :refer [five-digit-zip-code in? split-on-comma
@@ -121,9 +121,10 @@
   [zip-def]
   (is-open? zip-def (now-unix)))
 
-(defn order->market-id
+(defn order->zones
+  "Given an order map, get all the zones that it is within."
   [order]
-  (:market-id (get-zip-def (:address_zip order))))
+  (:zone-ids (get-zip-def (:address_zip order))))
 
 (defn get-zctas-for-zips
   "Given a string of comma-seperated zips and db-conn, return a list of
