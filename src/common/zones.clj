@@ -46,6 +46,17 @@
      
      :default-time-choice
      (or (:default-time-choice trans) (:default-time-choice base))
+
+     ;; used to determine which zone we should check for the number of
+     ;; one hour orders allowed at any point in time in that zone
+     ;; compared to number of couriers online and EXPLICITLY assigned
+     ;; to that zone
+     :one-hour-constraining-zone-id
+     (if (:constrain-num-one-hour? trans)
+       (:zone-id trans)
+       (if (:constrain-num-one-hour? base)
+         (:zone-id base)
+         (:one-hour-constraining-zone-id base)))
      
      :delivery-fee
      (if (:delivery-fee base)
@@ -123,8 +134,12 @@
 
 (defn order->zones
   "Given an order map, get all the zones that it is within."
-  [order]
-  (:zone-ids (get-zip-def (:address_zip order))))
+  [db-conn order]
+  (:zone-ids (get-zip-def db-conn (:address_zip order))))
+
+;; (defn get-zone-by-id
+;;   [db-conn id]
+;;   (first (!select db-conn "zones" ["*"] {:id id})))
 
 (defn get-zctas-for-zips
   "Given a string of comma-seperated zips and db-conn, return a list of
