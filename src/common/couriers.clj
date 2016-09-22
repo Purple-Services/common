@@ -1,37 +1,32 @@
 (ns common.couriers
   (:require [clojure.string :as s]
             [common.db :refer [mysql-escape-str !select !update]]
-            [common.util :refer [in? split-on-comma]]
-            [common.zones :refer [get-courier-zips]]))
+            [common.util :refer [in? split-on-comma]]))
 
-(defn process-courier
-  "Process a courier"
+(defn parse-courier-markets
   [courier]
   (assoc courier
-         :zones (if (s/blank? (:zones courier))
-                  ;; courier is not assigned to any zones, blank field
-                  #{}
-                  (->> (:zones courier)
-                       split-on-comma
-                       (map #(Integer. %))
-                       set))
-         :timestamp_created
-         (/ (.getTime
-             (:timestamp_created courier))
-            1000)))
+         :markets ; parse assigned markets into set
+         (->> (:markets courier)
+              split-on-comma
+              (remove s/blank?)
+              (map (fn [x] (Integer. x)))
+              set)))
 
 (defn get-couriers
   "Gets couriers from db. Optionally add WHERE constraints."
   [db-conn & {:keys [where]}]
-  (map process-courier
+  (map parse-courier-markets
        (!select db-conn "couriers" ["*"] (merge {} where))))
 
 (defn all-couriers
-  "All couriers."
+  "Get all couriers from db."
   [db-conn]
   (get-couriers db-conn))
 
-(def busy-statuses ["assigned" "accepted" "enroute" "servicing"])
+(def busy-statuses
+  "A collection of statuses that imply a courier is 'busy'."
+  ["assigned" "accepted" "enroute" "servicing"])
 
 (defn courier-busy?
   "Is courier currently working on an order?"
