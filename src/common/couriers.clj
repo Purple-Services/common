@@ -3,11 +3,11 @@
             [common.db :refer [mysql-escape-str !select !update]]
             [common.util :refer [in? split-on-comma]]))
 
-(defn parse-courier-markets
+(defn parse-courier-zones
   [courier]
   (assoc courier
-         :markets ; parse assigned markets into set
-         (->> (:markets courier)
+         :zones ; parse assigned markets into set
+         (->> (:zones courier)
               split-on-comma
               (remove s/blank?)
               (map (fn [x] (Integer. x)))
@@ -16,7 +16,7 @@
 (defn get-couriers
   "Gets couriers from db. Optionally add WHERE constraints."
   [db-conn & {:keys [where]}]
-  (map parse-courier-markets
+  (map parse-courier-zones
        (!select db-conn "couriers" ["*"] (merge {} where))))
 
 (defn all-couriers
