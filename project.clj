@@ -1,11 +1,11 @@
-(defproject common "2.0.0-SNAPSHOT"
+(defproject common "2.0.1-SNAPSHOT"
   :description "Common library for Purple web servers"
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/java.jdbc "0.2.3"] ;; required by db.clj
                  [mysql/mysql-connector-java "5.1.18"] ;; required by db.clj
                  [c3p0/c3p0 "0.9.1.2"] ;; required by db.clj
                  [cheshire "5.4.0"] ; required by users, orders
-                 [com.amazonaws/aws-java-sdk "1.9.24"] ;; this will be used by clj-aws below instead of its default aws version
+                 [com.amazonaws/aws-java-sdk "1.9.24"]
                  [clj-time "0.8.0"] ; required by util.clj
                  [crypto-password "0.1.3"] ; required by users.clj
                  [com.draines/postal "1.11.3"] ;; required by util.clj
