@@ -10,8 +10,7 @@
             [common.payment :as payment]
             [common.users :as users]
             [common.util :refer [cents->dollars cents->dollars-str in?
-                                 segment-client unix->DateTime unix->full]]
-            [common.zones :refer [order->zone-id]]))
+                                 segment-client unix->DateTime unix->full]]))
 
 (defn get-by-id
   "Gets an order from db by order's id."
@@ -48,8 +47,7 @@
          :service_fee (cents->dollars (:service_fee o))
          :total_price (cents->dollars (:total_price o))
          :target_time_start (unix->DateTime (:target_time_start o))
-         :target_time_end (unix->DateTime (:target_time_end o))
-         :zone_id (order->zone-id o)))
+         :target_time_end (unix->DateTime (:target_time_end o))))
 
 (defn stamp-with-charge
   "Give it a charge object from Stripe."
