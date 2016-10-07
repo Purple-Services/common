@@ -112,10 +112,11 @@
   "Get the ZIP definition after all transformations are applied.
   If not defined in any market, then nil."
   [db-conn zip-code] ; assumes zip-code is 5-digit version
-  (reduce apply-trans
-          {:zone-names [] ; starts with a fresh breadcrumb
-           :zone-ids []} 
-          (get-zones-with-zip db-conn zip-code)))
+  (when-let [zones (get-zones-with-zip db-conn zip-code)]
+    (reduce apply-trans
+            {:zone-names [] ; starts with a fresh breadcrumb
+             :zone-ids []} 
+            zones)))
 
 ;; (clojure.pprint/pprint (get-zip-def (conn) "91105"))
 
