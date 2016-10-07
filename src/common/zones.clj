@@ -1,9 +1,11 @@
 (ns common.zones
-  (:require [clojure.string :as s]
-            [common.db :refer [!select conn]]
+  (:require [common.db :refer [!select conn]]
             [common.util :refer [five-digit-zip-code in? split-on-comma
                                  now-unix unix->minute-of-day
-                                 minute-of-day->hmma unix->day-of-week]]))
+                                 minute-of-day->hmma unix->day-of-week]]
+            [clojure.string :as s]
+            [bouncer.core :as bouncer]
+            [bouncer.validators :as v]))
 
 (defn hours-today
   [hours]
@@ -108,17 +110,53 @@
                        "ORDER BY rank ASC")))
     nil))
 
+(defn nil-if-invalid
+  [zip-def]
+  (when (bouncer/valid?
+         zip-def
+         :zone-names [v/required vector? (partial every? string?)]
+         :zone-ids [v/required vector? (partial every? integer?)]
+         :gallon-choices [v/required map?]
+         :default-gallon-choice [v/required #(contains?
+                                              (:gallon-choices zip-def) %)]
+         [:gas-price "87"] [v/required integer? [v/in-range [0 5000]]]
+         [:gas-price "91"] [v/required integer? [v/in-range [0 5000]]]
+         :time-choices [v/required map?]
+         :default-time-choice [v/required
+                               #(in? (vals (:time-choices zip-def)) %)]
+         :delivery-fee [v/required
+                        (comp (partial every? integer?) keys)
+                        (comp (partial every? integer?) vals)
+                        (comp (partial every? #(v/in-range % [0 50000]))
+                              vals)
+                        ;; fee is defined for every time choice offered
+                        #(every? (comp (partial contains? %) val)
+                                 (:time-choices zip-def))]
+         :tire-pressure-price [v/required integer? [v/in-range [0 50000]]]
+         :hours [v/required
+                 vector?
+                 (partial every?
+                          (partial every?
+                                   #(and (vector? %)
+                                         (= 2 (count %))
+                                         (every? integer? %)
+                                         (every? (fn [x]
+                                                   (v/in-range x [0 1440]))
+                                                 %)
+                                         (<= (first %) (second %)))))]
+         :closed-message [v/required string?]
+         :one-hour-constraining-zone-id #(or (integer? %) (nil? %)))
+    zip-def))
+
 (defn get-zip-def
   "Get the ZIP definition after all transformations are applied.
   If not defined in any market, then nil."
   [db-conn zip-code] ; assumes zip-code is 5-digit version
-  (when-let [zones (get-zones-with-zip db-conn zip-code)]
-    (reduce apply-trans
-            {:zone-names [] ; starts with a fresh breadcrumb
-             :zone-ids []} 
-            zones)))
-
-;; (clojure.pprint/pprint (get-zip-def (conn) "91105"))
+  (nil-if-invalid
+   (reduce apply-trans
+           {:zone-names [] ; starts with a fresh breadcrumb
+            :zone-ids []} 
+           (get-zones-with-zip db-conn zip-code))))
 
 (defn is-open?
   [zip-def unix-time]

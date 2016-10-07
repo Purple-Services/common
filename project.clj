@@ -15,6 +15,6 @@
                  [environ "1.0.0"] ;; required by config.clj
                  [analytics-clj "0.3.0"] ;; required by payment.clj
                  [version-clj "0.1.2"] ;; required by util.clj
-                 ]
+                 [bouncer "1.0.0"]]
   :pedantic? false
   :java-source-paths ["src/java"])
