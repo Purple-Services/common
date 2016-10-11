@@ -1,1 +1,8 @@
 language: clojure
+notifications:
+  slack:
+    rooms:
+      - purpledelivery:LSIV4jgY6MoQMOWpAr6nnpo7#github
+    on_success: always
+    on_failure: always
+  email: false
