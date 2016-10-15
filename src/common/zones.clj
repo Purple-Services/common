@@ -83,14 +83,17 @@
          (:closed-message base)
          ;; TODO needs to handle empty hours better. maybe:
          ;; "Sorry, this ZIP is closed on Saturday and Sunday."
-         (str "Sorry, today's service hours for this location are "
-              (->> (hours-today hours)
-                   (map #(str (minute-of-day->hmma (first %))
-                              " to "
-                              (minute-of-day->hmma (second %))))
-                   (interpose " and ")
-                   (apply str))
-              ". Thank you for your business."))
+         (when hours
+           (if (empty? (hours-today hours))
+             "Sorry, this location is closed today. Thank you for your business."
+             (str "Sorry, today's service hours for this location are "
+                  (->> (hours-today hours)
+                       (map #(str (minute-of-day->hmma (first %))
+                                  " to "
+                                  (minute-of-day->hmma (second %))))
+                       (interpose " and ")
+                       (apply str))
+                  ". Thank you for your business."))))
 
      :manually-closed?
      (or (:manually-closed? trans) (:manually-closed? base))}))
@@ -148,15 +151,18 @@
          :one-hour-constraining-zone-id #(or (integer? %) (nil? %)))
     zip-def))
 
+(defn get-zip-def-not-validated
+  [db-conn zip-code]
+  (reduce apply-trans
+          {:zone-names [] ; starts with a fresh breadcrumb
+           :zone-ids []} 
+          (get-zones-with-zip db-conn zip-code)))
+
 (defn get-zip-def
   "Get the ZIP definition after all transformations are applied.
   If not defined in any market, then nil."
   [db-conn zip-code] ; assumes zip-code is 5-digit version
-  (nil-if-invalid
-   (reduce apply-trans
-           {:zone-names [] ; starts with a fresh breadcrumb
-            :zone-ids []} 
-           (get-zones-with-zip db-conn zip-code))))
+  (nil-if-invalid (get-zip-def-not-validated db-conn zip-code)))
 
 (defn is-open?
   [zip-def unix-time]

@@ -17,14 +17,14 @@
  :tire-pressure-price 700
  ;; considered open if current time is between any of the pairs
  ;; times are defined as "number of minutes since beginning of day"
- :hours [[[450 1350]]
+ :hours [[[450 1350]] ; Mon
+         [[450 1350]]
+         [[450 1350]] ; Wed
          [[450 1350]]
          [[450 1350]]
-         [[450 1350]]
-         [[450 1350]]
-         [[450 1350]
+         [[450 1350]  ; Sat
           [1400 1430]]
-         [[450 1350]]]
+         [[450 1350]]] ; Sun
  ;; if closed message is nil then the hardcoded message is used:
  ;; "Sorry, the service hours for this ZIP code are
  ;; 7:30am to 8:30pm, Monday to Friday. Thank you for your business."
