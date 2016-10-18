@@ -6,7 +6,7 @@
 (defn parse-courier-zones
   [courier]
   (assoc courier
-         :zones ; parse assigned markets into set
+         :zones ; parse assigned zones into set
          (->> (:zones courier)
               split-on-comma
               (remove s/blank?)

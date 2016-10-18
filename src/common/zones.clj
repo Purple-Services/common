@@ -99,7 +99,7 @@
      (or (:manually-closed? trans) (:manually-closed? base))}))
 
 (defn get-zones-with-zip
-  "Get all the zone defitions that contain this ZIP and are active.
+  "Get all the zone definitions that contain this ZIP and are active.
   Orders them by rank."
   [db-conn zip-code]
   (if-let [z (first (!select db-conn "zips" ["*"] {:zip zip-code}))]
@@ -109,7 +109,7 @@
          (!select db-conn "zones" ["*"] {}
                   :custom-where
                   (str "active = 1 AND "
-                       "id IN (" (:zones z) ")"
+                       "id IN (" (:zones z) ")" ; todo: sql injection?
                        "ORDER BY rank ASC")))
     nil))
 
