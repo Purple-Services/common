@@ -10,8 +10,7 @@
             [common.payment :as payment]
             [common.users :as users]
             [common.util :refer [cents->dollars cents->dollars-str in?
-                                 segment-client unix->DateTime unix->full]]
-            [common.zones :refer [order->zone-id]]))
+                                 segment-client unix->DateTime unix->full]]))
 
 (defn get-by-id
   "Gets an order from db by order's id."
@@ -48,8 +47,7 @@
          :service_fee (cents->dollars (:service_fee o))
          :total_price (cents->dollars (:total_price o))
          :target_time_start (unix->DateTime (:target_time_start o))
-         :target_time_end (unix->DateTime (:target_time_end o))
-         :zone_id (order->zone-id o)))
+         :target_time_end (unix->DateTime (:target_time_end o))))
 
 (defn stamp-with-charge
   "Give it a charge object from Stripe."
@@ -138,12 +136,15 @@
                             :revenue (cents->dollars (:total_price o))))
       (users/send-push db-conn (:user_id o)
                        (let [user (users/get-user-by-id db-conn (:user_id o))]
-                         (str "Your delivery has been completed. Share your code "
-                              (:referral_code user)
-                              " to earn free gas"
-                              (when (not (.contains (:arn_endpoint user) "GCM/Purple"))
-                                " \ue112") ; iOS gift emoji
-                              ". Thank you!")))))
+                         (str "Your delivery has been completed."
+                              (when-not (users/is-managed-account? user)
+                                (str " Share your code "
+                                     (:referral_code user)
+                                     " to earn free gas"
+                                     (when (not (.contains (:arn_endpoint user) "GCM/Purple"))
+                                       " \ue112") ; iOS gift emoji
+                                     "."))
+                              " Thank you!")))))
 
 (defn complete
   "Completes order and charges user."
@@ -182,126 +183,6 @@
       (users/send-push db-conn courier-id "You have been assigned a new order.")
       (users/text-user db-conn courier-id (new-order-text db-conn o true))
       {:success true})))
-
-(defn update-status-by-admin
-  [db-conn order-id]
-  (if-let [order (get-by-id db-conn order-id)]
-    (let [advanced-status (next-status (:status order))]
-      ;; Orders with "complete", "cancelled" or "unassigned" statuses can not be
-      ;; advanced. These orders should not be modifiable in the dashboard
-      ;; console, however this is checked on the server below.
-      (cond
-        (contains? #{"complete" "cancelled" "unassigned"} (:status order))
-        {:success false
-         :message (str "An order's status can not be advanced if it is already "
-                       "complete, cancelled, or unassigned.")}
-        ;; Likewise, the dashboard user should not be allowed to advanced
-        ;; to "assigned", but we check it on the server anyway.
-        (contains? #{"assigned"} advanced-status)
-        {:success false
-         :message (str "An order's status can not be advanced to assigned. "
-                       "Please assign a courier to this order in "
-                       "order to advance this order.")}
-        ;; update the status to "accepted"
-        (= advanced-status "accepted")
-        (do (accept db-conn order-id)
-            ;; let the courier know
-            (users/send-push
-             db-conn (:courier_id order)
-             "An order that was assigned to you is now marked as Accepted.")
-            {:success true
-             :message advanced-status})
-        ;; update the status to "enroute"
-        (= advanced-status "enroute")
-        (do (begin-route db-conn order)
-            ;; let the courier know
-            (users/send-push db-conn (:courier_id order)
-                             "Your order status has been advanced to enroute.")
-            {:success true
-             :message advanced-status})
-        ;; update the status to "servicing"
-        (= advanced-status "servicing")
-        (do (service db-conn order)
-            ;; let the courier know
-            (users/send-push
-             db-conn (:courier_id order)
-             "Your order status has been advanced to servicing.")
-            {:success true
-             :message advanced-status})
-        ;; update the order to "complete"
-        (= advanced-status "complete")
-        (do (complete db-conn order)
-            ;; let the courier know
-            (users/send-push db-conn (:courier_id order)
-                             "Your order status has been advanced to complete.")
-            {:success true
-             :message advanced-status})
-        ;; something wasn't caught
-        :else {:success false
-               :message "An unknown error occured."
-               :status advanced-status}))
-    ;; the order was not found on the server
-    {:success false
-     :message "An order with that ID could not be found."}))
-
-(defn assign-to-courier-by-admin
-  "Assign new-courier-id to order-id and alert the couriers of the
-  order reassignment"
-  [db-conn order-id new-courier-id]
-  (let [order (get-by-id db-conn order-id)
-        old-courier-id (:courier_id order)
-        change-order-assignment #(!update db-conn "orders"
-                                          {:courier_id new-courier-id}
-                                          {:id order-id})
-        notify-new-courier #(do (users/send-push
-                                 db-conn new-courier-id
-                                 (str "You have been assigned a new order,"
-                                      " please check your "
-                                      "Orders to view it"))
-                                (users/text-user
-                                 db-conn new-courier-id
-                                 (new-order-text db-conn order true)))
-        notify-old-courier #(users/send-push
-                             db-conn old-courier-id
-                             (str "You are no longer assigned to the order at: "
-                                  (:address_street order)))]
-    (cond
-      (= (:status order) "unassigned")
-      (do
-        ;; because the accept fn sets the couriers busy status to true,
-        ;; there is no need to further update the courier's status
-        (assign db-conn order-id new-courier-id)
-        ;; response
-        {:success true
-         :message (str order-id " has been assigned to " new-courier-id)})
-      (contains? #{"assigned" "accepted" "enroute" "servicing"} (:status order))
-      (do
-        ;; update the order so that is assigned to new-courier-id
-        (change-order-assignment)
-        ;; set the new-courier to busy
-        (set-courier-busy db-conn new-courier-id true)
-        ;; adjust old courier to correct busy setting
-        (update-courier-busy db-conn old-courier-id)
-        ;; notify the new-courier that they have a new order
-        (notify-new-courier)
-        ;; notify the old-courier that they lost an order
-        (notify-old-courier)
-        ;; response
-        {:success true
-         :message (str order-id " has been assigned from " new-courier-id " to "
-                       old-courier-id)})
-      (contains? #{"complete" "cancelled"} (:status order))
-      (do
-        ;; update the order so that is assigned to new-courier
-        (change-order-assignment)
-        ;; response
-        {:success true
-         :message (str order-id " has been assigned from " new-courier-id " to "
-                       old-courier-id)})
-      :else
-      {:success false
-       :message "An unknown error occured."})))
-
 
 (defn cancel
   [db-conn user-id order-id & {:keys [origin-was-dashboard
@@ -343,7 +224,8 @@
               (users/send-push
                db-conn user-id
                (str "Your order has been cancelled. If you have any questions,"
-                    " please email us at info@purpledelivery.com.")))
+                    " please email us at info@purpleapp.com or use the Feedback"
+                    " form on the left-hand menu.")))
             (when-not (s/blank? (:stripe_charge_id o))
               (let [refund-result (payment/refund-stripe-charge
                                    (:stripe_charge_id o))]

@@ -15,8 +15,8 @@
 (def safe-authd-user-keys
   "The keys of a user map that are safe to send out to auth'd user."
   [:id :type :email :name :phone_number :referral_code
-   :referral_gallons :is_courier :subscription_id :subscription_expiration_time
-   :subscription_auto_renew :subscription_period_start_time])
+   :referral_gallons :is_courier :account_manager_id :subscription_id
+   :subscription_expiration_time :subscription_auto_renew :subscription_period_start_time])
 
 (defn valid-session?
   [db-conn user-id token]
@@ -149,6 +149,10 @@
                                               ")"))))}})
     {:success false
      :message "User could not be found."}))
+
+(defn is-managed-account?
+  [user]
+  (not (s/blank? (:account_manager_id user))))
 
 (defn charge-user
   "Charges user amount (an int in cents) using default payment method."

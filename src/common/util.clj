@@ -6,14 +6,13 @@
            [java.util ArrayList])
   (:require [clojure.string :as s]
             [clojure.walk :refer [postwalk]]
-            [clj-aws.core :as aws]
-            [clj-aws.sns :as sns]
             [clj-time.core :as time]
             [clj-time.coerce :as time-coerce]
             [clj-time.format :as time-format]
             [postal.core :as postal]
             [common.config :as config]
             [common.db :refer [conn]]
+            [common.sns :as sns]
             [ardoq.analytics-clj :as segment]
             [version-clj.core :as version]))
 
@@ -27,6 +26,13 @@
   "Only run this code when in production mode."
   [& body]
   `(when (= config/db-user "purplemasterprod")
+     ~@body))
+
+(defmacro only-prod-or-dev
+  "Only run this code when in production mode."
+  [& body]
+  `(when (or (= config/db-user "purplemasterprod")
+             (= config/db-user "purplemaster"))
      ~@body))
 
 (defmacro catch-notify
@@ -103,57 +109,54 @@
   [x]
   (time-coerce/from-long (* 1000 x)))
 
-(def full-formatter (time-format/formatter "M/d h:mm a"))
-
-(defn unix->full
-  "Convert integer unix timestamp to formatted date string."
-  [x]
+(defn unix->format
+  "Convert integer unix time to formatted date string using supplied formatter."
+  [t formatter]
   (time-format/unparse
-   (time-format/with-zone full-formatter time-zone)
-   (unix->DateTime x)))
+   (time-format/with-zone formatter time-zone)
+   (unix->DateTime t)))
+
+(def full-formatter (time-format/formatter "M/d h:mm a"))
+(defn unix->full
+  "Convert integer unix time to formatted date string."
+  [t]
+  (unix->format t full-formatter))
 
 (def fuller-formatter (time-format/formatter "M/d/y h:mm a"))
-
 (defn unix->fuller
-  "Convert integer unix timestamp to formatted date string."
-  [x]
-  (time-format/unparse
-   (time-format/with-zone fuller-formatter time-zone)
-   (unix->DateTime x)))
+  "Convert integer unix time to formatted date string (M/d/y h:mm a)."
+  [t]
+  (unix->format t fuller-formatter))
 
 (def hour-formatter (time-format/formatter "H"))
-
 (defn unix->hour-of-day
-  "Convert integer unix timestamp to integer hour of day 0-23."
-  [x]
-  (Integer.
-   (time-format/unparse
-    (time-format/with-zone hour-formatter time-zone)
-    (unix->DateTime x))))
+  "Convert integer unix time to integer hour of day 0-23."
+  [t]
+  (Integer. (unix->format t hour-formatter)))
 
 (def minute-formatter (time-format/formatter "m"))
-
 (defn unix->minute-of-hour
   "Convert integer unix timestamp to integer minute of hour."
-  [x]
-  (Integer.
-   (time-format/unparse
-    (time-format/with-zone minute-formatter time-zone)
-    (unix->DateTime x))))
+  [t]
+  (Integer. (unix->format t minute-formatter)))
+
+(def hmma-formatter (time-format/formatter "h:mm a"))
+(defn unix->hmma
+  "Convert integer unix timestamp to formatted date string (h:mm a)."
+  [t]
+  (unix->format t hmma-formatter))
+
+(def day-of-week-formatter (time-format/formatter "e"))
+(defn unix->day-of-week
+  "Convert integer unix time to integer day of week 1 (mon) - 7 (sun)."
+  [t]
+  (Integer. (unix->format t day-of-week-formatter)))
 
 (defn unix->minute-of-day
   "How many minutes (int) since beginning of day?"
   [x]
   (+ (* (unix->hour-of-day x) 60)
      (unix->minute-of-hour x)))
-
-(def hmma-formatter (time-format/formatter "h:mm a"))
-(defn unix->hmma
-  "Convert integer unix timestamp to formatted date string."
-  [x]
-  (time-format/unparse
-   (time-format/with-zone hmma-formatter time-zone)
-   (unix->DateTime x)))
 
 (defn minute-of-day->hmma
   "Convert number of minutes since the beginning of today to a unix timestamp."
@@ -217,18 +220,6 @@
           (get event)
           (Integer.)))
 
-;; could this be an atom that is set to nil and initilized later?
-(when-let [segment-write-key (System/getProperty "SEGMENT_WRITE_KEY")]
-  (def segment-client (segment/initialize
-                       segment-write-key)))
-
-;; Amazon SNS (Push Notifications)
-(when-let [aws-access-key-id (System/getProperty "AWS_ACCESS_KEY_ID")]
-  (def sns-client
-    (sns/client (aws/credentials aws-access-key-id
-                                 (System/getProperty "AWS_SECRET_KEY"))))
-  (.setEndpoint sns-client "https://sns.us-west-2.amazonaws.com"))
-
 (defn send-email
   [message-map]
   (try (postal/send-message config/email
@@ -247,6 +238,18 @@
   (only-prod (send-email {:to "chris@purpleapp.com"
                           :subject "Purple - Error"
                           :body message})))
+
+;; could this be an atom that is set to nil and initilized later?
+(when-let [segment-write-key (System/getProperty "SEGMENT_WRITE_KEY")]
+  (def segment-client (segment/initialize
+                       segment-write-key)))
+
+;; Amazon SNS (Push Notifications)
+(when-let [aws-access-key-id (System/getProperty "AWS_ACCESS_KEY_ID")]
+  (def sns-client
+    (sns/client (sns/credentials aws-access-key-id
+                                 (System/getProperty "AWS_SECRET_KEY"))))
+  (.setEndpoint sns-client "https://sns.us-west-2.amazonaws.com"))
 
 (defn sns-create-endpoint
   [client device-token user-id sns-app-arn]

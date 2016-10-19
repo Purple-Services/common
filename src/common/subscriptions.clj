@@ -11,7 +11,16 @@
             [common.util :refer [split-on-comma rand-str-alpha-num
                                  coerce-double time-zone cents->dollars
                                  segment-client]]
+            [common.sendgrid :refer [send-template-email]]
             [ardoq.analytics-clj :as segment]))
+
+(defn get-all
+  [db-conn]
+  (!select db-conn "subscriptions" ["*"] {}))
+
+(defn get-all-mapped-by-id
+  [db-conn]
+  (into {} (map (juxt :id identity) (get-all db-conn))))
 
 (defn get-by-id
   "Get a subscription from DB given its ID."
@@ -31,7 +40,7 @@
   [db-conn user]
   (get-by-id db-conn (:subscription_id user)))
 
-(defn valid-subscription?
+(defn valid?
   "User's subscription is not expired?"
   [user]
   (> (or (:subscription_expiration_time user) 0)
@@ -41,7 +50,7 @@
   "Get a map of the usage and allowance of the subscription for current period."
   [db-conn user]
   (when-let [subscription (get-of-user db-conn user)]
-    (when (valid-subscription? user)
+    (when (valid? user)
       (merge subscription
              (reduce
               (fn [a b]
@@ -53,10 +62,14 @@
                     (= target-time-diff (* 60 60 3))
                     (update :num_free_three_hour_used inc)
 
+                    (= target-time-diff (* 60 60 5))
+                    (update :num_free_five_hour_used inc)
+
                     (:tire_pressure_check b)
                     (update :num_free_tire_pressure_check_used inc))))
               {:num_free_one_hour_used 0
                :num_free_three_hour_used 0
+               :num_free_five_hour_used 0
                :num_free_tire_pressure_check_used 0}
               (!select db-conn "orders"
                        [:target_time_start :target_time_end :tire_pressure_check]
@@ -182,9 +195,11 @@
                                                :auto-renew? true)]
     (when-not (:success result)
       (expire-subscription db-conn (:id user))
-      ;; send email saying the renew failed and that they have to
-      ;; add a card then tap on the Subscribe button again
-      )
+      (send-template-email (:email user)
+                           "Subject not used in this template."
+                           "Message body not used in this template."
+                           :template-id "63b4bbe3-9007-49e8-9a55-348195224eaf"
+                           :substitutions {:%name% (:name user)}))
     result))
 
 (defn subs-that-expire-tonight

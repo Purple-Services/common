@@ -1,102 +1,190 @@
 (ns common.zones
-  (:require [clojure.string :as s]
-            [common.db :refer [!select conn]]
-            [common.util :refer [five-digit-zip-code in?
-                                 split-on-comma]]))
+  (:require [common.db :refer [!select conn]]
+            [common.util :refer [five-digit-zip-code in? split-on-comma
+                                 now-unix unix->minute-of-day
+                                 minute-of-day->hmma unix->day-of-week]]
+            [clojure.string :as s]
+            [bouncer.core :as bouncer]
+            [bouncer.validators :as v]))
 
-(defn process-zones
-  "Process a col of zones for use on the server"
-  [zones]
-  (map #(update-in % [:zip_codes] split-on-comma) zones))
+(defn hours-today
+  [hours]
+  (nth hours (dec (unix->day-of-week (now-unix)))))
 
-(defn get-all-zones-from-db
-  "Get all zones from the database."
-  [db-conn]
-  (!select db-conn "zones" ["*"] {}))
+(defn apply-trans
+  "Apply a transformation on a definition.
+  (e.g., transform market definition with ZIP specific rules)."
+  [base trans]
+  (let [hours (or (:hours trans) (:hours base))]
+    {:zone-names (conj (:zone-names base)
+                       (:zone-name trans))
 
-(defn get-zones
-  "Get the all zones from the database and process them."
-  [db-conn]
-  (process-zones (get-all-zones-from-db db-conn)))
+     ;; this makes a breadcrumb of all transformations applied
+     ;; and is useful for determining if a courier is assigned to this zone
+     :zone-ids (conj (:zone-ids base)
+                     (:zone-id trans))
 
-(defn get-zone-by-zip-code
-  "Given a zip code, return the corresponding zone."
-  [zip-code]
-  (let [zip-code (five-digit-zip-code zip-code)]
-    (-> (!select (conn) "zones" ["*"] {}
-                 :custom-where
-                 (str "`zip_codes` LIKE '%" zip-code "%'"))
-        process-zones
-        first)))
+     :gallon-choices
+     (or (:gallon-choices trans) (:gallon-choices base))
+     
+     :default-gallon-choice
+     (or (:default-gallon-choice trans) (:default-gallon-choice base))
+     
+     :gas-price
+     (if (:gas-price base)
+       (into {}
+             (for [[k v] (:gas-price base)
+                   :let [diff-percent (or (get (:gas-price-diff-percent trans) k) 0)
+                         diff-fixed (or (get (:gas-price-diff-fixed trans) k) 0)]]
+               [k (if (get (:gas-price trans) k)
+                    (get (:gas-price trans) k) ; static override
+                    (Math/round (+ (double v) ; relative adjustment
+                                   (* v (/ diff-percent 100))
+                                   diff-fixed)))]))
+       (:gas-price trans))
+     
+     :time-choices
+     (or (:time-choices trans) (:time-choices base))
+     
+     :default-time-choice
+     (or (:default-time-choice trans) (:default-time-choice base))
 
-(defn order->zone-id
-  "Determine which zone the order is in; give the zone id."
-  [order]
-  (-> (get-zone-by-zip-code (:address_zip order))
-      :id))
+     ;; used to determine which zone we should check for the number of
+     ;; one hour orders allowed at any point in time in that zone
+     ;; compared to number of couriers online and EXPLICITLY assigned
+     ;; to that zone
+     :one-hour-constraining-zone-id
+     (if (:constrain-num-one-hour? trans)
+       (:zone-id trans)
+       (if (:constrain-num-one-hour? base)
+         (:zone-id base)
+         (:one-hour-constraining-zone-id base)))
+     
+     :delivery-fee
+     (if (:delivery-fee base)
+       (into {}
+             (for [[k v] (:delivery-fee base)
+                   :let [diff-percent (or (get (:delivery-fee-diff-percent trans) k) 0)
+                         diff-fixed (or (get (:delivery-fee-diff-fixed trans) k) 0)]]
+               [k (if (get (:delivery-fee trans) k)
+                    (get (:delivery-fee trans) k) ; static override
+                    (Math/round (+ (double v) ; relative adjustment
+                                   (* v (/ diff-percent 100))
+                                   diff-fixed)))]))
+       (:delivery-fee trans))
+     
+     :tire-pressure-price
+     (or (:tire-pressure-price trans) (:tire-pressure-price base))
 
-(defn zip-in-zones?
-  "Determine whether or not zip-code can be found in zones."
-  [zip-code]
-  (boolean (get-zone-by-zip-code zip-code)))
+     :hours hours
+     
+     :closed-message
+     (or (:closed-message trans)
+         (:closed-message base)
+         ;; TODO needs to handle empty hours better. maybe:
+         ;; "Sorry, this ZIP is closed on Saturday and Sunday."
+         (when hours
+           (if (empty? (hours-today hours))
+             "Sorry, this location is closed today. Thank you for your business."
+             (str "Sorry, today's service hours for this location are "
+                  (->> (hours-today hours)
+                       (map #(str (minute-of-day->hmma (first %))
+                                  " to "
+                                  (minute-of-day->hmma (second %))))
+                       (interpose " and ")
+                       (apply str))
+                  ". Thank you for your business."))))
 
-(defn get-fuel-prices
-  "Given a zip code, return the fuel prices for that zone."
-  [zip-code]
-  (some-> (get-zone-by-zip-code zip-code)
-          :fuel_prices
-          read-string))
+     :manually-closed?
+     (or (:manually-closed? trans) (:manually-closed? base))}))
 
-(defn get-service-fees
-  "Given a zip-code, return the service fees for that zone."
-  [zip-code]
-  (some-> (get-zone-by-zip-code zip-code)
-          :service_fees
-          read-string))
+(defn get-zones-with-zip
+  "Get all the zone definitions that contain this ZIP and are active.
+  Orders them by rank."
+  [db-conn zip-code]
+  (if-let [z (first (!select db-conn "zips" ["*"] {:zip zip-code}))]
+    (map #(merge {:zone-id (:id %)
+                  :zone-name (:name %)}
+                 (read-string (:config %)))
+         (!select db-conn "zones" ["*"] {}
+                  :custom-where
+                  (str "active = 1 AND "
+                       "id IN (" (:zones z) ")" ; todo: sql injection?
+                       "ORDER BY rank ASC")))
+    nil))
 
-(defn get-service-time-bracket
-  "Given a zip-code, return the service time bracket for that zone."
-  [zip-code]
-  (some-> (get-zone-by-zip-code zip-code)
-          :service_time_bracket
-          read-string))
+(defn nil-if-invalid
+  [zip-def]
+  (when (bouncer/valid?
+         zip-def
+         :zone-names [v/required vector? (partial every? string?)]
+         :zone-ids [v/required vector? (partial every? integer?)]
+         :gallon-choices [v/required map?]
+         :default-gallon-choice [v/required #(contains?
+                                              (:gallon-choices zip-def) %)]
+         [:gas-price "87"] [v/required integer? [v/in-range [0 5000]]]
+         [:gas-price "91"] [v/required integer? [v/in-range [0 5000]]]
+         :time-choices [v/required map?]
+         :default-time-choice [v/required
+                               #(in? (vals (:time-choices zip-def)) %)]
+         :delivery-fee [v/required
+                        (comp (partial every? integer?) keys)
+                        (comp (partial every? integer?) vals)
+                        (comp (partial every? #(v/in-range % [0 50000]))
+                              vals)
+                        ;; fee is defined for every time choice offered
+                        #(every? (comp (partial contains? %) val)
+                                 (:time-choices zip-def))]
+         :tire-pressure-price [v/required integer? [v/in-range [0 50000]]]
+         :hours [v/required
+                 vector?
+                 (partial every?
+                          (partial every?
+                                   #(and (vector? %)
+                                         (= 2 (count %))
+                                         (every? integer? %)
+                                         (every? (fn [x]
+                                                   (v/in-range x [0 1440]))
+                                                 %)
+                                         (<= (first %) (second %)))))]
+         :closed-message [v/required string?]
+         :one-hour-constraining-zone-id #(or (integer? %) (nil? %)))
+    zip-def))
 
-;; This is only considering the time element. They could be disallowed
-;; for other reasons.
-(defn get-one-hour-orders-allowed
-  "Given a zip-code, return the time in minutes that one hour orders are
-  allowed."
-  [zip-code]
-  (let [putative-bracket (get-service-time-bracket zip-code)]
-    (when putative-bracket
-      (-> putative-bracket
-          first
-          (+ 0) ;; for 1 1/2 hour delay: (+ 90)
-          ))))
+(defn get-zip-def-not-validated
+  [db-conn zip-code]
+  (reduce apply-trans
+          {:zone-names [] ; starts with a fresh breadcrumb
+           :zone-ids []} 
+          (get-zones-with-zip db-conn zip-code)))
 
-(defn courier-assigned-zones
-  "Given a courier-id, return a set of all zones they are assigned to"
-  [db-conn courier-id]
-  (let [zones (:zones (first
-                       (!select db-conn
-                                "couriers"
-                                [:zones]
-                                {:id courier-id})))]
-    (if (nil? (seq zones))
-      (set zones) ; the empty set
-      (set
-       (map read-string
-            (split-on-comma zones))))))
+(defn get-zip-def
+  "Get the ZIP definition after all transformations are applied.
+  If not defined in any market, then nil."
+  [db-conn zip-code] ; assumes zip-code is 5-digit version
+  (nil-if-invalid (get-zip-def-not-validated db-conn zip-code)))
 
-(defn get-courier-zips
-  "Given a courier-id, get all of the zip-codes that a courier is assigned to"
-  [db-conn courier-id]
-  (let [courier-zones (filter #(contains?
-                                (courier-assigned-zones db-conn courier-id)
-                                (:id %))
-                              (get-zones db-conn))
-        zip-codes (apply concat (map :zip_codes courier-zones))]
-    (set zip-codes)))
+(defn is-open?
+  [zip-def unix-time]
+  (and (not (:manually-closed? zip-def))
+       (some #(<= (first %)
+                  (unix->minute-of-day unix-time)
+                  (second %))
+             (hours-today (:hours zip-def)))))
+
+(defn is-open-now?
+  "Is this ZIP open right now?"
+  [zip-def]
+  (is-open? zip-def (now-unix)))
+
+(defn order->zones
+  "Given an order map, get all the zones that it is within."
+  [db-conn order]
+  (:zone-ids (get-zip-def db-conn (:address_zip order))))
+
+;; (defn get-zone-by-id
+;;   [db-conn id]
+;;   (first (!select db-conn "zones" ["*"] {:id id})))
 
 (defn get-zctas-for-zips
   "Given a string of comma-seperated zips and db-conn, return a list of

@@ -17,6 +17,7 @@
     (System/setProperty "DB_PORT" (env :db-port))
     (System/setProperty "DB_USER" (env :db-user))
     (System/setProperty "DB_PASSWORD" (env :db-password))
+    (System/setProperty "SENDGRID_API_KEY" (env :sendgrid-api-key))
     (System/setProperty "EMAIL_USER" (env :email-user))
     (System/setProperty "EMAIL_PASSWORD" (env :email-password))
     (System/setProperty "STRIPE_PRIVATE_KEY" (env :stripe-private-key))
@@ -28,7 +29,13 @@
     (System/setProperty "TWILIO_FROM_NUMBER" (env :twilio-form-number))
     (System/setProperty "SEGMENT_WRITE_KEY" (env :segment-write-key))
     (System/setProperty "DASHBOARD_GOOGLE_BROWSER_API_KEY"
-                        (env :dashboard-google-browser-api-key))))
+                        (env :dashboard-google-browser-api-key))
+    (System/setProperty "GOOGLE_OAUTH_WEB_CLIENT_ID"
+                        (env :google-oauth-web-client-id))
+    (System/setProperty "WIW_KEY" (env :wiw-key))
+    (System/setProperty "WIW_TOKEN" (env :wiw-token))
+    (System/setProperty "COURIER_APP_DOWNLOAD_URL_IPHONE" (env :courier-app-download-url-iphone))
+    (System/setProperty "COURIER_APP_DOWNLOAD_URL_ANDROID" (env :courier-app-download-url-android))))
 
 ;;;; Base Url of the web service
 ;; Should include trailing forward-slash (e.g., "http://domain.com/")
@@ -67,7 +74,7 @@
 (def max-courier-abandon-time (* 60 2))
 ;; How many long after a new order has been assigned to a courier but they
 ;; have not accepted the job; to then send them a reminder (seconds)
-(def courier-reminder-time (* 60 5))
+(def courier-reminder-time (* 60 15))
 
 ;;;; Email
 (def email-from-address (System/getProperty "EMAIL_USER"))
@@ -75,6 +82,13 @@
             :user (System/getProperty "EMAIL_USER")
             :pass (System/getProperty "EMAIL_PASSWORD")
             :ssl :yes!!!11})
+
+;;;; SendGrid
+(def sendgrid-api-url "https://api.sendgrid.com/v3/")
+(def sendgrid-api-key (System/getProperty "SENDGRID_API_KEY"))
+(def sendgrid-default-from "info@purpleapp.com")
+(def sendgrid-default-template-id "353043e0-a994-4c4f-b729-93452c583dee")
+
 
 ;;;; Push Notifications (using AWS SNS)
 ;; the customer apns arn is either Sandbox or Live APNS
@@ -105,6 +119,8 @@
                      :2 15})
 (def default-gallon-choice :2)
 
+(def tire-pressure-check-price 700)
+
 ;; The flow of order status; nil means status can't be changed
 (def status->next-status
   {"unassigned"  "assigned"
@@ -126,3 +142,18 @@
 ;; Google Maps API Key(s)
 (def dashboard-google-browser-api-key
   (System/getProperty "DASHBOARD_GOOGLE_BROWSER_API_KEY"))
+
+;; Google OAuth Web Client ID
+(def google-oauth-web-client-id
+  (System/getProperty "GOOGLE_OAUTH_WEB_CLIENT_ID"))
+
+;; wheniwork.com config options
+(def wiw-api-url "https://api.wheniwork.com/2/")
+(def wiw-key (System/getProperty "WIW_KEY"))
+(def wiw-token (System/getProperty "WIW_TOKEN"))
+
+;; Courier App Download
+(def courier-app-download-url-iphone
+  (System/getProperty "COURIER_APP_DOWNLOAD_URL_IPHONE"))
+(def courier-app-download-url-android
+  (System/getProperty "COURIER_APP_DOWNLOAD_URL_ANDROID"))
