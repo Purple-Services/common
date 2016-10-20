@@ -197,3 +197,10 @@
                        ")")]
     (!select db-conn "zctas" ["*"] {}
              :custom-where (str "zip in " in-clause))))
+
+;;;; REPL snippet
+;;;; Are there any zips that aren't fully defined?
+;; (println
+;;  (let [db-conn (conn)]
+;;    (remove (comp (partial get-zip-def db-conn) :zip)
+;;            (!select db-conn "zips" ["*"] {}))))
