@@ -30,6 +30,8 @@
     (System/setProperty "SEGMENT_WRITE_KEY" (env :segment-write-key))
     (System/setProperty "DASHBOARD_GOOGLE_BROWSER_API_KEY"
                         (env :dashboard-google-browser-api-key))
+    (System/setProperty "AUTO_ASSIGN_GOOGLE_SERVER_API_KEY"
+                        (env :auto-assign-google-server-api-key))
     (System/setProperty "GOOGLE_OAUTH_WEB_CLIENT_ID"
                         (env :google-oauth-web-client-id))
     (System/setProperty "WIW_KEY" (env :wiw-key))
