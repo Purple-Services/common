@@ -24,6 +24,14 @@
      :zone-ids (conj (:zone-ids base)
                      (:zone-id trans))
 
+     :market-id (if (= 100 (:zone-rank trans))
+                  (:zone-id trans)
+                  (:market-id base))
+
+     :submarket-id (if (= 1000 (:zone-rank trans))
+                     (:zone-id trans)
+                     (:submarket-id base))
+
      :gallon-choices
      (or (:gallon-choices trans) (:gallon-choices base))
      
@@ -103,9 +111,10 @@
   Orders them by rank."
   [db-conn zip-code]
   (if-let [z (first (!select db-conn "zips" ["*"] {:zip zip-code}))]
-    (map #(merge {:zone-id (:id %)
-                  :zone-name (:name %)}
-                 (read-string (:config %)))
+    (map #(merge (read-string (:config %))
+                 {:zone-id (:id %)
+                  :zone-name (:name %)
+                  :zone-rank (:rank %)})
          (!select db-conn "zones" ["*"] {}
                   :custom-where
                   (str "active = 1 AND "

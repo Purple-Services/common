@@ -9,6 +9,7 @@
             [common.db :refer [mysql-escape-str conn !select !update]]
             [common.payment :as payment]
             [common.users :as users]
+            [common.zones :refer [get-zip-def]]
             [common.util :refer [cents->dollars cents->dollars-str in?
                                  segment-client unix->DateTime unix->full]]))
 
@@ -37,7 +38,7 @@
 
 (defn segment-props
   "Get a map of all the standard properties we track on orders via segment."
-  [o]
+  [o & {:keys [zip-def]}]
   (assoc (select-keys o [:vehicle_id :gallons :gas_type :lat :lng
                          :address_street :address_city :address_state
                          :address_zip :license_plate :coupon_code
@@ -47,7 +48,9 @@
          :service_fee (cents->dollars (:service_fee o))
          :total_price (cents->dollars (:total_price o))
          :target_time_start (unix->DateTime (:target_time_start o))
-         :target_time_end (unix->DateTime (:target_time_end o))))
+         :target_time_end (unix->DateTime (:target_time_end o))
+         :market_id (:market-id zip-def)
+         :submarket_id (:submarket-id zip-def)))
 
 (defn stamp-with-charge
   "Give it a charge object from Stripe."
@@ -132,8 +135,11 @@
                                :id)] ;; is a standard coupon not referral coupon
           (coupons/apply-referral-bonus db-conn user-id)))
       (segment/track segment-client (:user_id o) "Complete Order"
-                     (assoc (segment-props o)
-                            :revenue (cents->dollars (:total_price o))))
+                     (assoc
+                      (segment-props o
+                                     :zip-def
+                                     (get-zip-def db-conn (:address_zip o)))
+                      :revenue (cents->dollars (:total_price o))))
       (users/send-push db-conn (:user_id o)
                        (let [user (users/get-user-by-id db-conn (:user_id o))]
                          (str "Your delivery has been completed."
@@ -235,7 +241,9 @@
                                      (:refund refund-result)))))
             (segment/track
              segment-client (:user_id o) "Cancel Order"
-             (assoc (segment-props o)
+             (assoc (segment-props o
+                                   :zip-def
+                                   (get-zip-def db-conn (:address_zip o)))
                     :cancelled-by-user (not origin-was-dashboard))))
           (if suppress-user-details
             {:success true}
