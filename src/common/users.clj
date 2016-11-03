@@ -8,7 +8,8 @@
             [common.config :as config]
             [common.util :refer [in? only-prod segment-client send-email
                                  send-sms sns-publish sns-client log-error]]
-            [common.db :refer [conn mysql-escape-str !select !update]]
+            [common.db :refer [conn mysql-escape-str !select !update
+                               raw-sql-query]]
             [common.couriers :as couriers]
             [common.payment :as payment]))
 
@@ -26,7 +27,19 @@
 (defn get-user
   "Gets a user from db. Optionally add WHERE constraints."
   [db-conn & {:keys [where]}]
-  (first (!select db-conn "users" ["*"] (merge {} where))))
+  (when-let [user (first (!select db-conn "users" ["*"] (merge {} where)))]
+    (do (println (!select db-conn
+                                        "account_children"
+                                        [:account_id]
+                                        {:user_id (:id user)}))
+        (assoc user ; add-in the account manager id (really the Account ID)
+           :account_manager_id
+           (:account_id (first (!select db-conn
+                                        "account_children"
+                                        [:account_id]
+                                        {:user_id (:id user)})))))))
+
+(get-user (conn) :where {:id "BoXBJoi7EUlCXL4RKt16"})
 
 ;; probably should be renamed to "get-by-id", like some of the other namespaces
 ;; since we are already contextualized in "users"
@@ -36,7 +49,8 @@
   (get-user db-conn :where {:id user-id}))
 
 (defn get-users-by-ids
-  "Gets multiple users by a list of ids."
+  "Gets multiple users by a list of ids.
+  NOTE: Does not include account_manager_id!"
   [db-conn ids]
   (if (seq ids)
     (!select db-conn
