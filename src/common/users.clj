@@ -28,18 +28,12 @@
   "Gets a user from db. Optionally add WHERE constraints."
   [db-conn & {:keys [where]}]
   (when-let [user (first (!select db-conn "users" ["*"] (merge {} where)))]
-    (do (println (!select db-conn
-                                        "account_children"
-                                        [:account_id]
-                                        {:user_id (:id user)}))
-        (assoc user ; add-in the account manager id (really the Account ID)
+    (assoc user ; add-in the account manager id (really the Account ID)
            :account_manager_id
            (:account_id (first (!select db-conn
                                         "account_children"
                                         [:account_id]
-                                        {:user_id (:id user)})))))))
-
-(get-user (conn) :where {:id "BoXBJoi7EUlCXL4RKt16"})
+                                        {:user_id (:id user)}))))))
 
 ;; probably should be renamed to "get-by-id", like some of the other namespaces
 ;; since we are already contextualized in "users"
