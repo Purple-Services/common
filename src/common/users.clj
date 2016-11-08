@@ -34,12 +34,14 @@
            ;; For app compatibility we only allow a user to be the child of
            ;; one account. Also, we call it account_manager_id, but a more
            ;; accurate key name would be account_id or parent_account_id.
-           :account_manager_id (some-> (!select db-conn
-                                                "account_children"
-                                                [:account_id]
-                                                {:user_id (:id user)})
-                                       first
-                                       :account_id))))
+           :account_manager_id (or (some-> (!select db-conn
+                                                    "account_children"
+                                                    [:account_id]
+                                                    {:user_id (:id user)})
+                                           first
+                                           :account_id)
+                                   "" ; for app, must use blank string not nil
+                                   ))))
 
 ;; probably should be renamed to "get-by-id", like some of the other namespaces
 ;; since we are already contextualized in "users"
