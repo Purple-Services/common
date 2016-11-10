@@ -14,9 +14,11 @@
 
 (def safe-authd-user-keys
   "The keys of a user map that are safe to send out to auth'd user."
-  [:id :type :email :name :phone_number :referral_code
-   :referral_gallons :is_courier :account_manager_id :subscription_id
-   :subscription_expiration_time :subscription_auto_renew :subscription_period_start_time])
+  [:id :type :email :name :phone_number :referral_code :referral_gallons
+   :is_courier :subscription_id :subscription_expiration_time
+   :subscription_auto_renew :subscription_period_start_time
+   ;; the following keys are not part of users table, but are added-in later:
+   :account_manager_id])
 
 (defn valid-session?
   [db-conn user-id token]
@@ -26,7 +28,19 @@
 (defn get-user
   "Gets a user from db. Optionally add WHERE constraints."
   [db-conn & {:keys [where]}]
-  (first (!select db-conn "users" ["*"] (merge {} where))))
+  (when-let [user (first (!select db-conn "users" ["*"] (merge {} where)))]
+    (assoc user
+           ;; For app compatibility we only allow a user to be the child of
+           ;; one account. Also, we call it account_manager_id, but a more
+           ;; accurate key name would be account_id or parent_account_id.
+           :account_manager_id (or (some-> (!select db-conn
+                                                    "account_children"
+                                                    [:account_id]
+                                                    {:user_id (:id user)})
+                                           first
+                                           :account_id)
+                                   "" ; for app, must use blank string not nil
+                                   ))))
 
 ;; probably should be renamed to "get-by-id", like some of the other namespaces
 ;; since we are already contextualized in "users"
@@ -36,7 +50,8 @@
   (get-user db-conn :where {:id user-id}))
 
 (defn get-users-by-ids
-  "Gets multiple users by a list of ids."
+  "Gets multiple users by a list of ids.
+  NOTE: Does not include account_manager_id!"
   [db-conn ids]
   (if (seq ids)
     (!select db-conn
