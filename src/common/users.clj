@@ -8,8 +8,7 @@
             [common.config :as config]
             [common.util :refer [in? only-prod segment-client send-email
                                  send-sms sns-publish sns-client log-error]]
-            [common.db :refer [conn mysql-escape-str !select !update
-                               raw-sql-query]]
+            [common.db :refer [conn mysql-escape-str !select !update]]
             [common.couriers :as couriers]
             [common.payment :as payment]))
 
