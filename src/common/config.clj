@@ -32,6 +32,8 @@
                         (env :dashboard-google-browser-api-key))
     (System/setProperty "AUTO_ASSIGN_GOOGLE_SERVER_API_KEY"
                         (env :auto-assign-google-server-api-key))
+    (System/setProperty "API_GOOGLE_SERVER_API_KEY"
+                        (env :api-google-server-api-key))
     (System/setProperty "GOOGLE_OAUTH_WEB_CLIENT_ID"
                         (env :google-oauth-web-client-id))
     (System/setProperty "WIW_KEY" (env :wiw-key))
@@ -144,6 +146,9 @@
 ;; Google Maps API Key(s)
 (def dashboard-google-browser-api-key
   (System/getProperty "DASHBOARD_GOOGLE_BROWSER_API_KEY"))
+(def api-google-server-api-key
+  (System/getProperty "API_GOOGLE_SERVER_API_KEY"))
+
 
 ;; Google OAuth Web Client ID
 (def google-oauth-web-client-id

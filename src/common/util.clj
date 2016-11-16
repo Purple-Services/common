@@ -14,7 +14,8 @@
             [common.db :refer [conn]]
             [common.sns :as sns]
             [ardoq.analytics-clj :as segment]
-            [version-clj.core :as version]))
+            [version-clj.core :as version]
+            [clj-http.client :as client]))
 
 (defmacro !
   "Keeps code from running during compilation."
@@ -328,3 +329,27 @@
   vector"
   [v]
   (map convert-timestamp v))
+
+(defn latlng->zip
+  "Get 5-digit ZIP given lat lng. nil on failure"
+  [lat lng]
+  (try
+    (let [resp (:body (clj-http.client/get
+                       "https://maps.googleapis.com/maps/api/geocode/json"
+                       {:as :json
+                        :content-type :json
+                        :coerce :always
+                        :query-params {:latlng (str lat "," lng)
+                                       :key config/api-google-server-api-key}}))]
+      (when (= "OK" (:status resp))
+        (some->> resp
+                 :results
+                 (filter #(in? (:types %) "postal_code"))
+                 first
+                 :address_components
+                 (filter #(in? (:types %) "postal_code"))
+                 first
+                 :short_name)))
+    (catch Exception e
+      (log-error (str e))
+      nil)))
