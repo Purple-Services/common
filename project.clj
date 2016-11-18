@@ -28,6 +28,6 @@
                     :injections
                     [(require 'pjstadig.humane-test-output)
                      (pjstadig.humane-test-output/activate!)]}
-                   :profiles/dev
-                   ;; :profiles/local
+                   ;; :profiles/dev
+                   :profiles/local
                    ]})

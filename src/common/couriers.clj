@@ -1,5 +1,6 @@
 (ns common.couriers
   (:require [clojure.string :as s]
+            [common.config :as config]
             [common.db :refer [mysql-escape-str !select !update]]
             [common.util :refer [in? split-on-comma]]))
 
@@ -23,6 +24,48 @@
   "Get all couriers from db."
   [db-conn]
   (get-couriers db-conn))
+
+(defn get-all-on-duty
+  "All the couriers that are currently connected."
+  [db-conn]
+  (get-couriers db-conn :where {:active true
+                                :on_duty true}))
+
+(defn get-all-connected
+  "All the couriers that are currently connected."
+  [db-conn]
+  (get-couriers db-conn :where {:active true
+                                :on_duty true
+                                :connected true}))
+
+(defn get-all-available
+  "All the connected couriers that aren't busy."
+  [db-conn]
+  (get-couriers db-conn :where {:active true
+                                :on_duty true
+                                :connected true
+                                :busy false}))
+
+(defn get-all-expired
+  "All the 'connected' couriers that haven't pinged recently."
+  [db-conn]
+  (map parse-courier-zones
+       (!select db-conn "couriers" ["*"] {}
+                :custom-where
+                (str "active = 1 AND connected = 1 AND ("
+                     (quot (System/currentTimeMillis) 1000)
+                     " - last_ping) > "
+                     config/max-courier-abandon-time))))
+
+(defn filter-by-zone
+  "Only couriers that work in this zone."
+  [zone-id couriers]
+  (filter #(in? (:zones %) zone-id) couriers))
+
+(defn on-duty?
+  "Is this courier on duty?"
+  [db-conn id]
+  (in? (map :id (get-all-on-duty db-conn)) id))
 
 (def busy-statuses
   "A collection of statuses that imply a courier is 'busy'."
@@ -51,6 +94,7 @@ and their id matches the order's courier_id"
   (let [busy? (courier-busy? db-conn courier-id)]
     (set-courier-busy db-conn courier-id busy?)))
 
+;; todo: should be in orders ns?
 (defn get-by-courier
   "Gets all of a courier's assigned orders."
   [db-conn courier-id]
