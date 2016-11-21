@@ -205,3 +205,20 @@ timescan be given various baselines"
      (time/date-time 2015 3 8)
      "11:30 PM") ; 10:30PM + 1hr!
     ))
+
+(deftest geocoding
+  (testing "Reverse Geocoding"
+    (is (= {:street "350 Hampton Dr", :zip "90291"}
+           (reverse-geocode 33.995632 -118.474990)))
+    (is (= {:street "10289 W Pico Blvd", :zip "90064"}
+           (reverse-geocode 34.046852, -118.412162)))
+    (is (= {:street "6771-6999 Westpark Pl", :zip "92683"}
+           (reverse-geocode 33.762711, -118.007325)))
+    (is (= {:street "San Juan Trail", :zip "92530"}
+           (reverse-geocode 33.632617, -117.470013)))
+    (is (= {:street "Killian Rd", :zip "92028"}
+           (reverse-geocode 33.378915, -117.184972)))
+    (is (= {:street "25 E Monterey Way", :zip "85012"}
+           (reverse-geocode 33.485030, -112.072470)))
+    (is (= {:street "10506 Operations Center Rd", :zip "85383"}
+           (reverse-geocode 33.879049, -112.271494)))))

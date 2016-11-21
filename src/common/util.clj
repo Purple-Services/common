@@ -330,26 +330,55 @@
   [v]
   (map convert-timestamp v))
 
-(defn latlng->zip
+;; TODO - consider caching with a db persistent hashmap
+;; or just an in-memory memoization (i would imagine an exact latlng is unlikely
+;; to be repeated outside of with an hour)
+(defn reverse-geocode
   "Get 5-digit ZIP given lat lng. nil on failure"
   [lat lng]
   (try
-    (let [resp (:body (clj-http.client/get
+    (let [body (:body (clj-http.client/get
                        "https://maps.googleapis.com/maps/api/geocode/json"
                        {:as :json
                         :content-type :json
                         :coerce :always
                         :query-params {:latlng (str lat "," lng)
-                                       :key config/api-google-server-api-key}}))]
-      (when (= "OK" (:status resp))
-        (some->> resp
-                 :results
-                 (filter #(in? (:types %) "postal_code"))
-                 first
-                 :address_components
-                 (filter #(in? (:types %) "postal_code"))
-                 first
-                 :short_name)))
+                                       :key config/api-google-server-api-key}}))
+          ;; _ (clojure.pprint/pprint body)
+          street-number (some->> body
+                                 :results
+                                 (filter #(in? (:types %) "street_address"))
+                                 first
+                                 :address_components
+                                 (filter #(in? (:types %) "street_number"))
+                                 first
+                                 :short_name)
+          street-name (or (some->> body
+                                   :results
+                                   (filter #(in? (:types %) "street_address"))
+                                   first
+                                   :address_components
+                                   (filter #(in? (:types %) "route"))
+                                   first
+                                   :short_name)
+                          (some->> body
+                                   :results
+                                   (filter #(in? (:types %) "route"))
+                                   first
+                                   :address_components
+                                   (filter #(in? (:types %) "route"))
+                                   first
+                                   :short_name))]
+      (when (= "OK" (:status body))
+        {:street (str street-number (when street-number " ") street-name)
+         :zip (some->> body
+                       :results
+                       (filter #(in? (:types %) "postal_code"))
+                       first
+                       :address_components
+                       (filter #(in? (:types %) "postal_code"))
+                       first
+                       :short_name)}))
     (catch Exception e
       (log-error (str e))
       nil)))

@@ -170,7 +170,28 @@
            {:stripe_refund_id (:id refund)}
            {:id order-id}))
 
-(defn calculate-cost
+(defn calc-delivery-fee
+  [db-conn user zip-def time]
+  (let [sub (subscriptions/get-with-usage db-conn user)
+        delivery-fee (get (:delivery-fee zip-def) time)]
+    (if sub
+      (let [[num-free num-free-used sub-discount]
+            (case time
+              60  [(:num_free_one_hour sub)
+                   (:num_free_one_hour_used sub)
+                   (:discount_one_hour sub)]
+              180 [(:num_free_three_hour sub)
+                   (:num_free_three_hour_used sub)
+                   (:discount_three_hour sub)]
+              300 [(:num_free_five_hour sub)
+                   (:num_free_five_hour_used sub)
+                   (:discount_five_hour sub)])]
+        (if (pos? (- num-free num-free-used))
+          0
+          (max 0 (+ delivery-fee sub-discount))))
+      delivery-fee)))
+
+(defn calc-cost-fixed
   "Calculate cost of order based on current prices. Returns cost in cents."
   [db-conn               ;; Database Connection
    user                  ;; 'user' map
@@ -189,24 +210,7 @@
          ;; number of gallons they need to pay for
          (- gallons (min gallons referral-gallons-used)))
       ;; add delivery fee (w/ consideration of subscription)
-      (let [sub (subscriptions/get-with-usage db-conn user)
-            delivery-fee (get (:delivery-fee zip-def) time)]
-        (if sub
-          (let [[num-free num-free-used sub-discount]
-                (case time
-                  60  [(:num_free_one_hour sub)
-                       (:num_free_one_hour_used sub)
-                       (:discount_one_hour sub)]
-                  180 [(:num_free_three_hour sub)
-                       (:num_free_three_hour_used sub)
-                       (:discount_three_hour sub)]
-                  300 [(:num_free_five_hour sub)
-                       (:num_free_five_hour_used sub)
-                       (:discount_five_hour sub)])]
-            (if (pos? (- num-free num-free-used))
-              0
-              (max 0 (+ delivery-fee sub-discount))))
-          delivery-fee))
+      (calc-delivery-fee db-conn user zip-def time)
       ;; add cost of tire pressure check if applicable
       (if tire-pressure-check
         config/tire-pressure-check-price
@@ -225,19 +229,26 @@
 (defn valid-price?
   "Is the stated 'total_price' accurate?"
   [db-conn user zip-def o & {:keys [bypass-zip-code-check]}]
-  (= (:total_price o)
-     (calculate-cost db-conn
-                     user
-                     zip-def
-                     (:gas_type o)
-                     (:gallons o)
-                     (:time-limit o)
-                     (:tire_pressure_check o)
-                     (:coupon_code o)
-                     (:vehicle_id o)
-                     (:referral_gallons_used o)
-                     (:address_zip o)
-                     :bypass-zip-code-check bypass-zip-code-check)))
+  (if (= "fillup" (:gallons o))
+    ;; variable amount of gallons, check if gas-price and service-fee are right
+    (and (= (get (:gas-price zip-def) (:gas_type o))
+            (:gas_price o))
+         (= (calc-delivery-fee db-conn user zip-def time)
+            (:service_fee o)))
+    ;; fixed number of gallons, so we can check final price
+    (= (:total_price o) 
+       (calc-cost-fixed db-conn
+                        user
+                        zip-def
+                        (:gas_type o)
+                        (:gallons o)
+                        (:time-limit o)
+                        (:tire_pressure_check o)
+                        (:coupon_code o)
+                        (:vehicle_id o)
+                        (:referral_gallons_used o)
+                        (:address_zip o)
+                        :bypass-zip-code-check bypass-zip-code-check))))
 
 (defn orders-in-zone
   [db-conn zone-id os]
@@ -370,13 +381,13 @@
                                                       :tire_pressure_check]))
             (when-not (zero? (:referral_gallons_used o))
               (coupons/mark-gallons-as-used db-conn
-                                    (:user_id o)
-                                    (:referral_gallons_used o)))
+                                            (:user_id o)
+                                            (:referral_gallons_used o)))
             (when-not (s/blank? (:coupon_code o))
               (coupons/mark-code-as-used db-conn
-                                 (:coupon_code o)
-                                 (:license_plate o)
-                                 (:user_id o)))
+                                         (:coupon_code o)
+                                         (:license_plate o)
+                                         (:user_id o)))
             (future ;; we can process the rest of this asynchronously
               (when (and charge-authorized? (not (zero? (:total_price o))))
                 (stamp-with-charge db-conn (:id o) (:charge auth-charge-result)))
