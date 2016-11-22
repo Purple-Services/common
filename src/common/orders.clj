@@ -233,7 +233,7 @@
     ;; variable amount of gallons, check if gas-price and service-fee are right
     (and (= (get (:gas-price zip-def) (:gas_type o))
             (:gas_price o))
-         (= (calc-delivery-fee db-conn user zip-def time)
+         (= (calc-delivery-fee db-conn user zip-def (:time-limit o))
             (:service_fee o)))
     ;; fixed number of gallons, so we can check final price
     (= (:total_price o) 
