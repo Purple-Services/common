@@ -179,10 +179,6 @@
   [m]
   (postwalk #(unless-p map? % (java.util.HashMap. %)) m))
 
-(defn unix->DateTime
-  [x]
-  (time-coerce/from-long (* 1000 x)))
-
 (defn rand-str
   [ascii-codes length]
   (apply str (repeatedly length #(char (rand-nth ascii-codes)))))
@@ -322,7 +318,7 @@
 (defn convert-timestamp
   "Replace :timestamp_created value in m with unix epoch seconds"
   [m]
-  (assoc m :timestamp_created (timestamp->unix-epoch (:timestamp_created m))))
+  (update m :timestamp_created timestamp->unix-epoch))
 
 (defn convert-timestamps
   "Replace the :timestamp_created value with unix epoch seconds in each map of
