@@ -103,8 +103,10 @@
   "Generate a description of the order (e.g., for including on a receipt)."
   [db-conn order]
   (let [vehicle (first (!select db-conn "vehicles" ["*"] {:id (:vehicle_id order)}))]
-    (str "Reliability service for up to "
-         (gallons->display-str (:gallons order)) " Gallons of Fuel"
+    (str (if (= "fillup" (:gallons order))
+           "Reliability service for full tank of fuel"
+           (str "Reliability service for up to "
+                (gallons->display-str (:gallons order)) " Gallons of Fuel"))
          " (" (:gas_type vehicle) " Octane)" ; assumes you're calling this when order is place (i.e., it could change)
          (when (:tire_pressure_check order) "\n+ Tire Pressure Fill-up")
          "\nVehicle: " (:year vehicle) " " (:make vehicle) " " (:model vehicle)
@@ -236,7 +238,7 @@
          (= (calc-delivery-fee db-conn user zip-def (:time-limit o))
             (:service_fee o)))
     ;; fixed number of gallons, so we can check final price
-    (= (:total_price o) 
+    (= (:total_price o)
        (calc-cost-fixed db-conn
                         user
                         zip-def
@@ -287,6 +289,7 @@
   [db-conn user-id order & {:keys [bypass-zip-code-check]}]
   (let [time-limit (Integer. (:time order))
         vehicle (first (!select db-conn "vehicles" ["*"] {:id (:vehicle_id order)}))
+        gas-type (:gas_type vehicle)
         user (users/get-user-by-id db-conn user-id)
         referral-gallons-available (:referral_gallons user)
         curr-time-secs (quot (System/currentTimeMillis) 1000)
@@ -301,17 +304,19 @@
                  :target_time_start curr-time-secs
                  :target_time_end (+ curr-time-secs (* 60 time-limit))
                  :time-limit time-limit
-                 :gallons (coerce-double (:gallons order))
-                 :gas_type (if (:gas_type order)
-                             (:gas_type order)
-                             (throw (Exception. "Outdated app version.")))
+                 :gallons (if (= "fillup" (:gallons order))
+                            "fillup"
+                            (coerce-double (:gallons order)))
+                 :gas_type gas-type
                  :is_top_tier (:only_top_tier vehicle)
                  :lat (coerce-double (:lat order))
                  :lng (coerce-double (:lng order))
                  :license_plate (:license_plate vehicle)
                  ;; we'll use as many referral gallons as available
-                 :referral_gallons_used (min (coerce-double (:gallons order))
-                                             referral-gallons-available)
+                 :referral_gallons_used (if (= "fillup" (:gallons order))
+                                          0
+                                          (min (coerce-double (:gallons order))
+                                               referral-gallons-available))
                  :coupon_code (coupons/format-coupon-code (or (:coupon_code order) ""))
                  :subscription_id (if (subscriptions/valid? user)
                                     (:subscription_id user)
@@ -366,19 +371,22 @@
              :message "Sorry, we were unable to charge your credit card."
              :code "charge-auth-failed"})
           (do ;; successful payment (or free order), place order...
-            (!insert db-conn "orders" (select-keys o [:id :user_id :vehicle_id
-                                                      :status :target_time_start
-                                                      :target_time_end
-                                                      :gallons :gas_type :is_top_tier
-                                                      :special_instructions
-                                                      :lat :lng :address_street
-                                                      :address_city :address_state
-                                                      :address_zip :gas_price
-                                                      :service_fee :total_price
-                                                      :license_plate :coupon_code
-                                                      :referral_gallons_used
-                                                      :subscription_id
-                                                      :tire_pressure_check]))
+            (!insert db-conn
+                     "orders"
+                     (assoc (select-keys o [:id :user_id :vehicle_id
+                                            :status :target_time_start
+                                            :target_time_end
+                                            :gallons :gas_type :is_top_tier
+                                            :special_instructions
+                                            :lat :lng :address_street
+                                            :address_city :address_state
+                                            :address_zip :gas_price
+                                            :service_fee :total_price
+                                            :license_plate :coupon_code
+                                            :referral_gallons_used
+                                            :subscription_id
+                                            :tire_pressure_check])
+                            :event_log ""))
             (when-not (zero? (:referral_gallons_used o))
               (coupons/mark-gallons-as-used db-conn
                                             (:user_id o)
@@ -433,6 +441,7 @@
                                  {:email (:email user) ;; required every time
                                   :HASORDERED 1})))
             {:success true
+             :order_id (:id o)
              :message (str "Your order has been accepted, and a courier will be "
                            "on the way soon! Please ensure that the fueling door "
                            "on your gas tank is unlocked.")
@@ -484,20 +493,45 @@
                                      "."))
                               " Thank you!")))))
 
+(defn resolve-fillup-gallons
+  [db-conn o gallons total-price]
+  (!update db-conn
+           "orders"
+           {:gallons gallons
+            :total_price total-price}
+           {:id (:id o)})
+  (payment/update-stripe-charge (:stripe_charge_id o)
+                                (gen-charge-description
+                                 db-conn
+                                 (assoc o
+                                        :gallons gallons
+                                        :total_price total-price))))
+
 (defn complete
   "Completes order and charges user."
-  [db-conn o]
-  (do (update-status db-conn (:id o) "complete")
-      (couriers/update-courier-busy db-conn (:courier_id o))
-      (if (or (zero? (:total_price o))
-              (s/blank? (:stripe_charge_id o)))
-        (after-payment db-conn o)
-        (let [capture-result (payment/capture-stripe-charge
-                              (:stripe_charge_id o))]
-          (if (:success capture-result)
-            (do (stamp-with-charge db-conn (:id o) (:charge capture-result))
-                (after-payment db-conn o))
-            capture-result)))))
+  [db-conn o & {:keys [resolved-fillup-gallons]}]
+  (let [total-price
+        (if (= "fillup" (:gallons o))
+          ((comp (partial max 0) int #(Math/ceil %))
+           (+ (* (:gas_price o) resolved-fillup-gallons)
+              (:service_fee o)))
+          (:total_price o))]
+    (update-status db-conn (:id o) "complete")
+    (couriers/update-courier-busy db-conn (:courier_id o))
+    (when (= "fillup" (:gallons o))
+      (resolve-fillup-gallons db-conn o resolved-fillup-gallons total-price))
+    (if (or (zero? total-price)
+            (s/blank? (:stripe_charge_id o)))
+      ;; if was zero and was a fillup, then what?
+      (after-payment db-conn o)
+      (let [capture-result
+            (payment/capture-stripe-charge
+             (:stripe_charge_id o)
+             :amount (when (= "fillup" (:gallons o)) total-price))]
+        (if (:success capture-result)
+          (do (stamp-with-charge db-conn (:id o) (:charge capture-result))
+              (after-payment db-conn o))
+          capture-result)))))
 
 (defn next-status
   [status]

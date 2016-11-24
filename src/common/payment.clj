@@ -81,8 +81,10 @@
 
 (defn capture-stripe-charge
   "Captures an authorized charge."
-  [charge-id]
-  (let [resp (:resp (stripe-req "post" (str "charges/" charge-id "/capture")))]
+  [charge-id & {:keys [amount]}]
+  (let [resp (:resp (stripe-req "post"
+                                (str "charges/" charge-id "/capture")
+                                (when amount {:amount amount})))]
     (if (:captured resp)
       {:success true
        :charge resp}
@@ -112,3 +114,19 @@
 (defn get-stripe-charge
   [charge-id]
   (stripe-req "get" (str "charges/" charge-id)))
+
+(defn update-stripe-charge
+  "Update a Stripe charge."
+  [charge-id description]
+  (let [resp (:resp (stripe-req "post"
+                                (str "charges/" charge-id)
+                                {:description description}))]
+    (if (:id resp)
+      {:success true}
+      (do (only-prod (send-email
+                      {:to "chris@purpledelivery.com"
+                       :subject "Failed To Update Stripe Charge"
+                       :body (str "Details:\n\n"
+                                  "Charge ID: " charge-id "\n")}))
+          {:success false
+           :resp resp}))))
