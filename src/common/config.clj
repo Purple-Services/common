@@ -2,11 +2,9 @@
   (:require [clojure.string :as s]
             [environ.core :refer [env]]))
 
-(defn test-or-dev-env? [env]
-  "Given env, return true if we are in test or dev"
-  (if (or (= (env :env) "test") (= (env :env) "dev")) true false))
-
-(if (test-or-dev-env? env)
+(if (or (= (env :env) "test")
+        (= (env :env) "dev")
+        (= (env :env) "local"))
   (do
     (System/setProperty "AWS_ACCESS_KEY_ID" (env :aws-access-key-id))
     (System/setProperty "AWS_SECRET_KEY" (env :aws-secret-key))
