@@ -378,3 +378,11 @@
     (catch Exception e
       (log-error (str e))
       nil)))
+
+(defn compute-total-price
+  "Compute total price given the final amount of gallons (after referral
+  applied) and delivery (after subscription applied) and gas price."
+  [gas-price gallons delivery-fee]
+  ((comp (partial max 0) int #(Math/ceil %))
+   (+ (* gas-price gallons)
+      delivery-fee)))

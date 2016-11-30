@@ -19,7 +19,8 @@
                                  rand-str-alpha-num coerce-double
                                  segment-client send-email send-sms
                                  unless-p only-prod only-prod-or-dev now-unix
-                                 unix->fuller unix->full unix->minute-of-day]]))
+                                 unix->fuller unix->full unix->minute-of-day
+                                 compute-total-price]]))
 
 ;; Order status definitions
 ;; unassigned - not assigned to any courier yet
@@ -103,7 +104,7 @@
   "Generate a description of the order (e.g., for including on a receipt)."
   [db-conn order]
   (let [vehicle (first (!select db-conn "vehicles" ["*"] {:id (:vehicle_id order)}))]
-    (str (if (= "fillup" (:gallons order))
+    (str (if (:is_fillup order)
            "Reliability service for full tank of fuel"
            (str "Reliability service for up to "
                 (gallons->display-str (:gallons order)) " Gallons of Fuel"))
@@ -229,9 +230,9 @@
         0))))
 
 (defn valid-price?
-  "Is the stated 'total_price' accurate?"
+  "Has the price changed while user was in checkout process?"
   [db-conn user zip-def o & {:keys [bypass-zip-code-check]}]
-  (if (= "fillup" (:gallons o))
+  (if (:is_fillup o)
     ;; variable amount of gallons, check if gas-price and service-fee are right
     (and (= (get (:gas-price zip-def) (:gas_type o))
             (:gas_price o))
@@ -296,16 +297,16 @@
         zip-def (get-zip-def db-conn (:address_zip order))
         o (assoc (select-keys order [:vehicle_id :special_instructions
                                      :address_street :address_city
-                                     :address_state :address_zip :gas_price
-                                     :service_fee :total_price])
+                                     :address_state :address_zip :is_fillup
+                                     :gas_price :service_fee :total_price])
                  :id (rand-str-alpha-num 20)
                  :user_id user-id
                  :status "unassigned"
                  :target_time_start curr-time-secs
                  :target_time_end (+ curr-time-secs (* 60 time-limit))
                  :time-limit time-limit
-                 :gallons (if (= "fillup" (:gallons order))
-                            "fillup"
+                 :gallons (when (:gallons order)
+                            ;; 'when' is important to allow nil to pass through
                             (coerce-double (:gallons order)))
                  :gas_type gas-type
                  :is_top_tier (:only_top_tier vehicle)
@@ -313,8 +314,10 @@
                  :lng (coerce-double (:lng order))
                  :license_plate (:license_plate vehicle)
                  ;; we'll use as many referral gallons as available
-                 :referral_gallons_used (if (= "fillup" (:gallons order))
-                                          0
+                 :referral_gallons_used (if (:is_fillup order)
+                                          ;; referral gallons currently cannot
+                                          ;; be applied to fillup
+                                          0 
                                           (min (coerce-double (:gallons order))
                                                referral-gallons-available))
                  :coupon_code (coupons/format-coupon-code (or (:coupon_code order) ""))
@@ -381,7 +384,7 @@
                                             :special_instructions
                                             :lat :lng :address_street
                                             :address_city :address_state
-                                            :address_zip :gas_price
+                                            :address_zip :is_fillup :gas_price
                                             :service_fee :total_price
                                             :license_plate :coupon_code
                                             :referral_gallons_used
@@ -429,9 +432,10 @@
                                                         )
                                              :icon_emoji ":fuelpump:"
                                              :username "New Order"}})
-                 (run! #(send-sms % order-text-info)
-                       ["4083388336" ; Jackson 
-                        ])))
+                 ;; (run! #(send-sms % order-text-info)
+                 ;;       ["5555555555" ; put phone numbers here
+                 ;;        ])
+                 ))
               
               (only-prod-or-dev
                (segment/track segment-client (:user_id o) "Request Order"
@@ -511,15 +515,14 @@
 (defn complete
   "Completes order and charges user."
   [db-conn o & {:keys [resolved-fillup-gallons]}]
-  (let [total-price
-        (if (= "fillup" (:gallons o))
-          ((comp (partial max 0) int #(Math/ceil %))
-           (+ (* (:gas_price o) resolved-fillup-gallons)
-              (:service_fee o)))
-          (:total_price o))]
+  (let [total-price (if (:is-fillup o)
+                      (compute-total-price (:gas_price o)
+                                           resolved-fillup-gallons
+                                           (:service_fee o))
+                      (:total_price o))]
     (update-status db-conn (:id o) "complete")
     (couriers/update-courier-busy db-conn (:courier_id o))
-    (when (= "fillup" (:gallons o))
+    (when (:is-fillup o)
       (resolve-fillup-gallons db-conn o resolved-fillup-gallons total-price))
     (if (or (zero? total-price)
             (s/blank? (:stripe_charge_id o)))
@@ -528,7 +531,8 @@
       (let [capture-result
             (payment/capture-stripe-charge
              (:stripe_charge_id o)
-             :amount (when (= "fillup" (:gallons o)) total-price))]
+             ;; only need to adjust price if it was a fillup
+             :amount (when (:is_fillup o) total-price))]
         (if (:success capture-result)
           (do (stamp-with-charge db-conn (:id o) (:charge capture-result))
               (after-payment db-conn o))
