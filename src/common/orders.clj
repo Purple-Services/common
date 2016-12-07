@@ -371,7 +371,6 @@
                                    :charge-authorized charge-authorized? ;; false
                                    :reason "failed-charge")))
             {:success false
-             :auth-charge-result auth-charge-result
              :message "Sorry, we were unable to charge your credit card."
              :code "charge-auth-failed"})
           (do ;; successful payment (or free order), place order...
