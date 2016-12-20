@@ -288,168 +288,176 @@
 (defn add
   "The user-id given is assumed to have been auth'd already."
   [db-conn user-id order & {:keys [bypass-zip-code-check]}]
-  (let [time-limit (Integer. (:time order))
-        vehicle (first (!select db-conn "vehicles" ["*"] {:id (:vehicle_id order)}))
-        gas-type (:gas_type vehicle)
-        user (users/get-user-by-id db-conn user-id)
-        referral-gallons-available (:referral_gallons user)
-        curr-time-secs (quot (System/currentTimeMillis) 1000)
-        zip-def (get-zip-def db-conn (:address_zip order))
-        o (assoc (select-keys order [:vehicle_id :special_instructions
-                                     :address_street :address_city
-                                     :address_state :address_zip :is_fillup
-                                     :gas_price :service_fee :total_price])
-                 :id (rand-str-alpha-num 20)
-                 :user_id user-id
-                 :status "unassigned"
-                 :target_time_start curr-time-secs
-                 :target_time_end (+ curr-time-secs (* 60 time-limit))
-                 :time-limit time-limit
-                 :gallons (when (:gallons order)
-                            ;; 'when' is important to allow nil to pass through
-                            (coerce-double (:gallons order)))
-                 :gas_type gas-type
-                 :is_top_tier (:only_top_tier vehicle)
-                 :lat (coerce-double (:lat order))
-                 :lng (coerce-double (:lng order))
-                 :license_plate (:license_plate vehicle)
-                 ;; we'll use as many referral gallons as available
-                 :referral_gallons_used (if (:is_fillup order)
-                                          ;; referral gallons currently cannot
-                                          ;; be applied to fillup
-                                          0 
-                                          (min (coerce-double (:gallons order))
-                                               referral-gallons-available))
-                 :coupon_code (coupons/format-coupon-code (or (:coupon_code order) ""))
-                 :subscription_id (if (subscriptions/valid? user)
-                                    (:subscription_id user)
-                                    0)
-                 :tire_pressure_check (or (:tire_pressure_check order) false))]
+  (if-let [zip-def (get-zip-def db-conn (:address_zip order))]
+    (if-let [vehicle (first (!select db-conn "vehicles" ["*"] {:id (:vehicle_id order)}))]
+      (let [time-limit (Integer. (:time order))
+            gas-type (:gas_type vehicle)
+            user (users/get-user-by-id db-conn user-id)
+            referral-gallons-available (:referral_gallons user)
+            curr-time-secs (quot (System/currentTimeMillis) 1000)
+            o (assoc (select-keys order [:vehicle_id :special_instructions
+                                         :address_street :address_city
+                                         :address_state :address_zip :is_fillup
+                                         :gas_price :service_fee :total_price])
+                     :id (rand-str-alpha-num 20)
+                     :user_id user-id
+                     :status "unassigned"
+                     :target_time_start curr-time-secs
+                     :target_time_end (+ curr-time-secs (* 60 time-limit))
+                     :time-limit time-limit
+                     :gallons (when (:gallons order)
+                                ;; 'when' is important to allow nil to pass through
+                                (coerce-double (:gallons order)))
+                     :gas_type gas-type
+                     :is_top_tier (:only_top_tier vehicle)
+                     :lat (coerce-double (:lat order))
+                     :lng (coerce-double (:lng order))
+                     :license_plate (:license_plate vehicle)
+                     ;; we'll use as many referral gallons as available
+                     :referral_gallons_used (if (:is_fillup order)
+                                              ;; referral gallons currently cannot
+                                              ;; be applied to fillup
+                                              0 
+                                              (min (coerce-double (:gallons order))
+                                                   referral-gallons-available))
+                     :coupon_code (coupons/format-coupon-code (or (:coupon_code order) ""))
+                     :subscription_id (if (subscriptions/valid? user)
+                                        (:subscription_id user)
+                                        0)
+                     :tire_pressure_check (or (:tire_pressure_check order) false))]
 
-    (cond
-      (not (valid-price? db-conn user zip-def o :bypass-zip-code-check bypass-zip-code-check))
-      (do (only-prod-or-dev
-           (segment/track segment-client (:user_id o) "Request Order Failed"
-                          (assoc (segment-props o :zip-def zip-def)
-                                 :reason "price-changed-during-review")))
-          {:success false
-           :message "The price changed while you were creating your order."
-           :code "invalid-price"})
-
-      (not (valid-time-choice? db-conn zip-def o))
-      (do (only-prod-or-dev
-           (segment/track segment-client (:user_id o) "Request Order Failed"
-                          (assoc (segment-props o :zip-def zip-def)
-                                 :reason "high-demand")))
-          {:success false
-           :message (str "We currently are experiencing high demand and "
-                         "can't promise a delivery within that time limit. Please "
-                         "choose the \"within 3 hours\" or "
-                         "\"within 5 hours\" option.")
-           :code "invalid-time-choice"})
-
-      (not (is-open? zip-def (:target_time_start o)))
-      (do (only-prod-or-dev
-           (segment/track segment-client (:user_id o) "Request Order Failed"
-                          (assoc (segment-props o :zip-def zip-def)
-                                 :reason "outside-service-hours")))
-          {:success false
-           :message (:closed-message zip-def)
-           :code "outside-service-hours"})
-      
-      :else
-      (let [auth-charge-result (if (or (zero? (:total_price o)) ; nothing to charge
-                                       (users/is-managed-account? user)) ; managed account (will be charged later)
-                                 {:success true}
-                                 (auth-charge-order db-conn o))
-            charge-authorized? (:success auth-charge-result)]
-        (if (not charge-authorized?)
-          (do ;; payment failed, do not allow order to be placed
-            (only-prod-or-dev
-             (segment/track segment-client (:user_id o) "Request Order Failed"
-                            (assoc (segment-props o :zip-def zip-def)
-                                   :charge-authorized charge-authorized? ;; false
-                                   :reason "failed-charge")))
-            {:success false
-             :message "Sorry, we were unable to charge your credit card."
-             :code "charge-auth-failed"})
-          (do ;; successful payment (or free order), place order...
-            (!insert db-conn
-                     "orders"
-                     (assoc (select-keys o [:id :user_id :vehicle_id
-                                            :status :target_time_start
-                                            :target_time_end
-                                            :gallons :gas_type :is_top_tier
-                                            :special_instructions
-                                            :lat :lng :address_street
-                                            :address_city :address_state
-                                            :address_zip :is_fillup :gas_price
-                                            :service_fee :total_price
-                                            :license_plate :coupon_code
-                                            :referral_gallons_used
-                                            :subscription_id
-                                            :tire_pressure_check])
-                            :event_log ""))
-            (when-not (zero? (:referral_gallons_used o))
-              (coupons/mark-gallons-as-used db-conn
-                                            (:user_id o)
-                                            (:referral_gallons_used o)))
-            (when-not (s/blank? (:coupon_code o))
-              (coupons/mark-code-as-used db-conn
-                                         (:coupon_code o)
-                                         (:license_plate o)
-                                         (:user_id o)))
-            (future ;; we can process the rest of this asynchronously
-              (when (and charge-authorized? (not (zero? (:total_price o))))
-                (stamp-with-charge db-conn (:id o) (:charge auth-charge-result)))
-
-              ;; fraud detection
-              (when (not (zero? (:total_price o)))
-                (let [c (:charge auth-charge-result)]
-                  (sift/charge-authorization
-                   o user
-                   (if charge-authorized?
-                     {:stripe-charge-id (:id c)
-                      :successful? true
-                      :card-last4 (:last4 (:card c))
-                      :stripe-cvc-check (:cvc_check (:card c))
-                      :stripe-funding (:funding (:card c))
-                      :stripe-brand (:brand (:card c))
-                      :stripe-customer-id (:customer c)}
-                     {:stripe-charge-id (:charge (:error c))
-                      :successful? false
-                      :decline-reason-code (:decline_code (:error c))}))))
-              
-              (only-prod
-               (let [order-text-info (new-order-text db-conn o charge-authorized?)]
-                 (client/post "https://hooks.slack.com/services/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"
-                              {:throw-exceptions false
-                               :content-type :json
-                               :form-params {:text (str order-text-info
-                                                        ;; TODO
-                                                        ;; "\n<https://NEED_ORDER_PAGE_LINK_HERE|View on Dashboard>"
-                                                        )
-                                             :icon_emoji ":fuelpump:"
-                                             :username "New Order"}})
-                 ;; (run! #(send-sms % order-text-info)
-                 ;;       ["5555555555" ; put phone numbers here
-                 ;;        ])
-                 ))
-              
-              (only-prod-or-dev
-               (segment/track segment-client (:user_id o) "Request Order"
+        (cond
+          (not (valid-price? db-conn user zip-def o :bypass-zip-code-check bypass-zip-code-check))
+          (do (only-prod-or-dev
+               (segment/track segment-client (:user_id o) "Request Order Failed"
                               (assoc (segment-props o :zip-def zip-def)
-                                     :charge-authorized charge-authorized?))
-               ;; used by mailchimp
-               (segment/identify segment-client (:user_id o)
-                                 {:email (:email user) ;; required every time
-                                  :HASORDERED 1})))
-            {:success true
-             :order_id (:id o)
-             :message (str "Your order has been accepted, and a courier will be "
-                           "on the way soon! Please ensure that the fueling door "
-                           "on your gas tank is unlocked.")
-             :code "order-accepted"}))))))
+                                     :reason "price-changed-during-review")))
+              {:success false
+               :message "The price changed while you were creating your order."
+               :code "invalid-price"})
+
+          (not (valid-time-choice? db-conn zip-def o))
+          (do (only-prod-or-dev
+               (segment/track segment-client (:user_id o) "Request Order Failed"
+                              (assoc (segment-props o :zip-def zip-def)
+                                     :reason "high-demand")))
+              {:success false
+               :message (str "We currently are experiencing high demand and "
+                             "can't promise a delivery within that time limit. Please "
+                             "choose the \"within 3 hours\" or "
+                             "\"within 5 hours\" option.")
+               :code "invalid-time-choice"})
+
+          (not (is-open? zip-def (:target_time_start o)))
+          (do (only-prod-or-dev
+               (segment/track segment-client (:user_id o) "Request Order Failed"
+                              (assoc (segment-props o :zip-def zip-def)
+                                     :reason "outside-service-hours")))
+              {:success false
+               :message (:closed-message zip-def)
+               :code "outside-service-hours"})
+          
+          :else
+          (let [auth-charge-result (if (or (zero? (:total_price o)) ; nothing to charge
+                                           (users/is-managed-account? user)) ; managed account (will be charged later)
+                                     {:success true}
+                                     (auth-charge-order db-conn o))
+                charge-authorized? (:success auth-charge-result)]
+            (if (not charge-authorized?)
+              (do ;; payment failed, do not allow order to be placed
+                (only-prod-or-dev
+                 (segment/track segment-client (:user_id o) "Request Order Failed"
+                                (assoc (segment-props o :zip-def zip-def)
+                                       :charge-authorized charge-authorized? ;; false
+                                       :reason "failed-charge")))
+                {:success false
+                 :message "Sorry, we were unable to charge your credit card."
+                 :code "charge-auth-failed"})
+              (do ;; successful payment (or free order), place order...
+                (!insert db-conn
+                         "orders"
+                         (assoc (select-keys o [:id :user_id :vehicle_id
+                                                :status :target_time_start
+                                                :target_time_end
+                                                :gallons :gas_type :is_top_tier
+                                                :special_instructions
+                                                :lat :lng :address_street
+                                                :address_city :address_state
+                                                :address_zip :is_fillup :gas_price
+                                                :service_fee :total_price
+                                                :license_plate :coupon_code
+                                                :referral_gallons_used
+                                                :subscription_id
+                                                :tire_pressure_check])
+                                :event_log ""))
+                (when-not (zero? (:referral_gallons_used o))
+                  (coupons/mark-gallons-as-used db-conn
+                                                (:user_id o)
+                                                (:referral_gallons_used o)))
+                (when-not (s/blank? (:coupon_code o))
+                  (coupons/mark-code-as-used db-conn
+                                             (:coupon_code o)
+                                             (:license_plate o)
+                                             (:user_id o)))
+                (future ;; we can process the rest of this asynchronously
+                  (when (and charge-authorized? (not (zero? (:total_price o))))
+                    (stamp-with-charge db-conn (:id o) (:charge auth-charge-result)))
+
+                  ;; fraud detection
+                  (when (not (zero? (:total_price o)))
+                    (let [c (:charge auth-charge-result)]
+                      (sift/charge-authorization
+                       o user
+                       (if charge-authorized?
+                         {:stripe-charge-id (:id c)
+                          :successful? true
+                          :card-last4 (:last4 (:card c))
+                          :stripe-cvc-check (:cvc_check (:card c))
+                          :stripe-funding (:funding (:card c))
+                          :stripe-brand (:brand (:card c))
+                          :stripe-customer-id (:customer c)}
+                         {:stripe-charge-id (:charge (:error c))
+                          :successful? false
+                          :decline-reason-code (:decline_code (:error c))}))))
+                  
+                  (only-prod
+                   (let [order-text-info (new-order-text db-conn o charge-authorized?)]
+                     (client/post "https://hooks.slack.com/services/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"
+                                  {:throw-exceptions false
+                                   :content-type :json
+                                   :form-params {:text (str order-text-info
+                                                            ;; TODO
+                                                            ;; "\n<https://NEED_ORDER_PAGE_LINK_HERE|View on Dashboard>"
+                                                            )
+                                                 :icon_emoji ":fuelpump:"
+                                                 :username "New Order"}})
+                     ;; (run! #(send-sms % order-text-info)
+                     ;;       ["5555555555" ; put phone numbers here
+                     ;;        ])
+                     ))
+                  
+                  (only-prod-or-dev
+                   (segment/track segment-client (:user_id o) "Request Order"
+                                  (assoc (segment-props o :zip-def zip-def)
+                                         :charge-authorized charge-authorized?))
+                   ;; used by mailchimp
+                   (segment/identify segment-client (:user_id o)
+                                     {:email (:email user) ;; required every time
+                                      :HASORDERED 1})))
+                {:success true
+                 :order_id (:id o)
+                 :message (str "Your order has been accepted, and a courier will be "
+                               "on the way soon! Please ensure that the fueling door "
+                               "on your gas tank is unlocked.")})))))
+      {:success false
+       :message "Sorry, we don't recognize your vehicle information."
+       :code "invalid-vehicle-id"})
+    {:success false
+     :message (str "Sorry, we are unable to deliver gas to your "
+                   "location. We are rapidly expanding our service "
+                   "area and hope to offer service to your "
+                   "location very soon.")
+     :code "outside-service-area"}))
 
 
 (defn begin-route
@@ -618,7 +626,16 @@
           (if suppress-user-details
             {:success true}
             (users/details db-conn user-id)))
-      {:success false
-       :message "Sorry, it is too late for this order to be cancelled."})
+      (cond
+        (= "cancelled" (:status o)) 
+        {:success false
+         :message "That order has already been cancelled."
+         :code "already-cancelled"}
+
+        :else
+        {:success false
+         :message "Sorry, it is too late for this order to be cancelled."
+         :code "too-late-to-cancel"}))
     {:success false
-     :message "An order with that ID could not be found."}))
+     :message "An order with that ID could not be found."
+     :code "invalid-order-id"}))
