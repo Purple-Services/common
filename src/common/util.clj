@@ -379,6 +379,26 @@
       (log-error (str e))
       nil)))
 
+(defn geocode
+  "Get lat lng when given street address & zip code. nil on failure"
+  [street zip]
+  (try
+    (let [body (:body (clj-http.client/get
+                       "https://maps.googleapis.com/maps/api/geocode/json"
+                       {:as :json
+                        :content-type :json
+                        :coerce :always
+                        :query-params {:address (str street ", " zip)
+                                       :key config/api-google-server-api-key}}))
+          ;; _ (clojure.pprint/pprint body)
+          ]
+      (when (= "OK" (:status body))
+        {:lat (-> body :results first :geometry :location :lat)
+         :lng (-> body :results first :geometry :location :lng)}))
+    (catch Exception e
+      (log-error (str e))
+      nil)))
+
 (defn compute-total-price
   "Compute total price given the final amount of gallons (after referral
   applied) and delivery (after subscription applied) and gas price."
