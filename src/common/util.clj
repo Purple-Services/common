@@ -389,12 +389,17 @@
                         :content-type :json
                         :coerce :always
                         :query-params {:address (str street ", " zip)
-                                       :key config/api-google-server-api-key}}))
-          ;; _ (clojure.pprint/pprint body)
-          ]
+                                       :key config/api-google-server-api-key}}))]
       (when (= "OK" (:status body))
         {:lat (-> body :results first :geometry :location :lat)
-         :lng (-> body :results first :geometry :location :lng)}))
+         :lng (-> body :results first :geometry :location :lng)
+         :resolved-zip (some->> body
+                                :results
+                                first
+                                :address_components
+                                (filter #(in? (:types %) "postal_code"))
+                                first
+                                :short_name)}))
     (catch Exception e
       (log-error (str e))
       nil)))
