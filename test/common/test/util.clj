@@ -210,8 +210,6 @@ timescan be given various baselines"
   (testing "Reverse Geocoding"
     (is (= {:street "350 Hampton Dr", :zip "90291"}
            (reverse-geocode 33.995632 -118.474990)))
-    (is (= {:street "10289 W Pico Blvd", :zip "90064"}
-           (reverse-geocode 34.046852, -118.412162)))
     (is (= {:street "6771-6999 Westpark Pl", :zip "92683"}
            (reverse-geocode 33.762711, -118.007325)))
     (is (= {:street "San Juan Trail", :zip "92530"}
