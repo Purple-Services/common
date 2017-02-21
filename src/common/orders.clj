@@ -287,7 +287,7 @@
 
 (defn add
   "The user-id given is assumed to have been auth'd already."
-  [db-conn user-id order & {:keys [bypass-zip-code-check]}]
+  [db-conn user-id order & {:keys [bypass-zip-code-check street-address-override]}]
   (if-let [zip-def (get-zip-def db-conn (:address_zip order))]
     (if-let [vehicle (first (!select db-conn "vehicles" ["*"] {:id (:vehicle_id order)}))]
       (let [time-limit (Integer. (:time order))
@@ -296,7 +296,7 @@
             referral-gallons-available (:referral_gallons user)
             curr-time-secs (quot (System/currentTimeMillis) 1000)
             o (assoc (select-keys order [:vehicle_id :special_instructions
-                                         :address_street :address_city
+                                         :address_city
                                          :address_state :address_zip :is_fillup
                                          :gas_price :service_fee :total_price])
                      :id (rand-str-alpha-num 20)
@@ -312,6 +312,8 @@
                      :is_top_tier (:only_top_tier vehicle)
                      :lat (coerce-double (:lat order))
                      :lng (coerce-double (:lng order))
+                     :address_street (or street-address-override
+                                         (:address_street order))
                      :license_plate (:license_plate vehicle)
                      ;; we'll use as many referral gallons as available
                      :referral_gallons_used (if (:is_fillup order)
@@ -389,7 +391,9 @@
                                                 :referral_gallons_used
                                                 :subscription_id
                                                 :tire_pressure_check])
-                                :event_log ""))
+                                :event_log ""
+                                :is_overridden_street_address
+                                (not (nil? street-address-override))))
                 (when-not (zero? (:referral_gallons_used o))
                   (coupons/mark-gallons-as-used db-conn
                                                 (:user_id o)
