@@ -346,8 +346,7 @@
               {:success false
                :message (str "We currently are experiencing high demand and "
                              "can't promise a delivery within that time limit. Please "
-                             "choose the \"within 3 hours\" or "
-                             "\"within 5 hours\" option.")
+                             "go back and choose a different Time option.")
                :code "invalid-time-choice"})
 
           (not (is-open? zip-def (:target_time_start o)))

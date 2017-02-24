@@ -134,8 +134,11 @@
          [:gas-price "87"] [v/required integer? [v/in-range [0 5000]]]
          [:gas-price "91"] [v/required integer? [v/in-range [0 5000]]]
          :time-choices [v/required map?]
-         :default-time-choice [v/required
-                               #(in? (vals (:time-choices zip-def)) %)]
+         ;; This isn't currently supported in the mobile app.
+         ;; Also, the Dashboard currently allows the user to remove the 180 time
+         ;; choice even though 180 is hardcoded as the default-time-choice.
+         ;; :default-time-choice [v/required
+         ;;                       #(in? (vals (:time-choices zip-def)) %)]
          :delivery-fee [v/required
                         (comp (partial every? integer?) keys)
                         (comp (partial every? integer?) vals)
