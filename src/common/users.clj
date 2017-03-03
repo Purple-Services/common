@@ -169,6 +169,11 @@
   [user]
   (not (s/blank? (:account_manager_id user))))
 
+(defn is-child-user-with-no-vehicles?
+  [db-conn user]
+  (and (is-managed-account? user) ; this first, to avoid unnecessary db call
+       (empty? (get-users-vehicles db-conn (:id user)))))
+
 (defn charge-user
   "Charges user amount (an int in cents) using default payment method."
   [db-conn user-id amount description idempotency-key
