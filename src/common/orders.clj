@@ -560,12 +560,16 @@
 
 ;; note that it takes order-id, not order
 (defn assign
-  [db-conn order-id courier-id & {:keys [no-reassigns]}]
+  [db-conn order-id courier-id & {:keys [no-reassigns auto-assign-note]}]
   (let [o (get-by-id db-conn order-id)]
     (when (or (not no-reassigns)
               (= "unassigned" (:status o)))
       (update-status db-conn order-id "assigned")
-      (!update db-conn "orders" {:courier_id courier-id} {:id order-id})
+      (!update db-conn
+               "orders"
+               {:courier_id courier-id
+                :auto_assign_note (or auto-assign-note "Manual")}
+               {:id order-id})
       (couriers/set-courier-busy db-conn courier-id true)
       (users/send-push db-conn courier-id "You have been assigned a new order.")
       (users/text-user db-conn courier-id (new-order-text db-conn o true))
