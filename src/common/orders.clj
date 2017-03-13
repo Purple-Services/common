@@ -568,7 +568,7 @@
       (!update db-conn
                "orders"
                {:courier_id courier-id
-                :auto_assign_note (or auto-assign-note "Manual")}
+                :auto_assign_note auto-assign-note}
                {:id order-id})
       (couriers/set-courier-busy db-conn courier-id true)
       (users/send-push db-conn courier-id "You have been assigned a new order.")
